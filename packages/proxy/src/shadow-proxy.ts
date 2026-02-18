@@ -9,6 +9,7 @@ import {
 import { spawn, ChildProcess } from 'child_process';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { existsSync } from 'fs';
 import { ToolRegistry, SLACK_TOOLS, STRIPE_TOOLS, GMAIL_TOOLS } from './tool-registry.js';
 import { EventBus, ChaosCommand, InjectMessageCommand, InjectEmailCommand, InjectStripeEventCommand } from './event-bus.js';
 
@@ -886,12 +887,15 @@ export class ShadowProxy {
   }
 
   private getServerPath(service: string): string | null {
-    const paths: Record<string, string> = {
-      slack: resolve(__dirname, '..', '..', 'server-slack', 'dist', 'index.js'),
-      stripe: resolve(__dirname, '..', '..', 'server-stripe', 'dist', 'index.js'),
-      gmail: resolve(__dirname, '..', '..', 'server-gmail', 'dist', 'index.js'),
-    };
-    return paths[service] || null;
+    // Bundled layout (npm package): dist/server-slack.js next to dist/proxy.js
+    const bundled = resolve(__dirname, `server-${service}.js`);
+    if (existsSync(bundled)) return bundled;
+
+    // Monorepo layout: packages/proxy/dist/ → packages/server-*/dist/
+    const monorepo = resolve(__dirname, '..', '..', `server-${service}`, 'dist', 'index.js');
+    if (existsSync(monorepo)) return monorepo;
+
+    return null;
   }
 
   private getDefaultTools(service: string) {

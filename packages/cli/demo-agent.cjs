@@ -21,10 +21,16 @@
 const { spawn } = require('child_process');
 const path = require('path');
 
+const fs = require('fs');
+
 const wsPortFlag = process.argv.find(a => a.startsWith('--ws-port='));
 const wsPort = wsPortFlag ? wsPortFlag.split('=')[1] : '3002';
 
-const proxyPath = path.join(__dirname, '..', 'proxy', 'dist', 'index.js');
+// Bundled layout: dist/proxy.js next to dist/demo-agent.cjs
+// Monorepo layout: packages/cli/ → packages/proxy/dist/index.js
+const bundledProxy = path.join(__dirname, 'proxy.js');
+const monorepoProxy = path.join(__dirname, '..', 'proxy', 'dist', 'index.js');
+const proxyPath = fs.existsSync(bundledProxy) ? bundledProxy : monorepoProxy;
 
 // Start the proxy
 const proxy = spawn('node', [

@@ -176,7 +176,11 @@ program
     const wsPort = parseInt(opts.wsPort, 10);
 
     // 1. Serve the Console static files
-    const consoleDist = resolve(__dirname, '..', '..', 'console', 'dist');
+    // Bundled layout: dist/console/ next to dist/cli.js
+    // Monorepo layout: packages/cli/dist/ → packages/console/dist/
+    const consoleDist = existsSync(resolve(__dirname, 'console'))
+      ? resolve(__dirname, 'console')
+      : resolve(__dirname, '..', '..', 'console', 'dist');
     if (!existsSync(consoleDist)) {
       console.error('\x1b[31m  Error: Console not built. Run `npm run build` first.\x1b[0m');
       process.exit(1);
@@ -219,7 +223,11 @@ program
     });
 
     // 2. Start the demo agent (which starts the proxy internally)
-    const demoAgentPath = resolve(__dirname, '..', 'demo-agent.cjs');
+    // Bundled: dist/demo-agent.cjs next to dist/cli.js
+    // Monorepo: packages/cli/demo-agent.cjs (up from dist/)
+    const demoAgentPath = existsSync(resolve(__dirname, 'demo-agent.cjs'))
+      ? resolve(__dirname, 'demo-agent.cjs')
+      : resolve(__dirname, '..', 'demo-agent.cjs');
     if (!existsSync(demoAgentPath)) {
       console.error('\x1b[31m  Error: demo-agent.cjs not found.\x1b[0m');
       process.exit(1);
@@ -339,7 +347,7 @@ program
     console.error('\x1b[35m\x1b[1m  ◈ Shadow MCP Scenarios\x1b[0m');
     console.error('');
 
-    const scenariosDir = resolve(__dirname, '..', '..', '..', 'scenarios');
+    const scenariosDir = getScenariosDir();
     if (!existsSync(scenariosDir)) {
       console.error('\x1b[2m  No scenarios directory found.\x1b[0m');
       return;
@@ -370,12 +378,20 @@ program
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
+function getScenariosDir(): string {
+  // Bundled layout: dist/../scenarios
+  const bundled = resolve(__dirname, '..', 'scenarios');
+  if (existsSync(bundled)) return bundled;
+  // Monorepo layout: packages/cli/dist/ → root/scenarios/
+  return resolve(__dirname, '..', '..', '..', 'scenarios');
+}
+
 function resolveScenarioPath(scenario: string): string | null {
   // Direct file path
   if (existsSync(scenario)) return resolve(scenario);
 
   // Check in scenarios directory
-  const scenariosDir = resolve(__dirname, '..', '..', '..', 'scenarios');
+  const scenariosDir = getScenariosDir();
 
   // Try as service/name pattern
   if (scenario.includes('/')) {
@@ -398,12 +414,15 @@ function resolveScenarioPath(scenario: string): string | null {
 }
 
 function resolveServerPath(service: string): string | null {
-  const serverMap: Record<string, string> = {
-    slack: resolve(__dirname, '..', '..', 'server-slack', 'dist', 'index.js'),
-    stripe: resolve(__dirname, '..', '..', 'server-stripe', 'dist', 'index.js'),
-    gmail: resolve(__dirname, '..', '..', 'server-gmail', 'dist', 'index.js'),
-  };
-  return serverMap[service] || null;
+  // Bundled layout: dist/server-slack.js next to dist/cli.js
+  const bundled = resolve(__dirname, `server-${service}.js`);
+  if (existsSync(bundled)) return bundled;
+
+  // Monorepo layout: packages/cli/dist/ → packages/server-*/dist/
+  const monorepo = resolve(__dirname, '..', '..', `server-${service}`, 'dist', 'index.js');
+  if (existsSync(monorepo)) return monorepo;
+
+  return null;
 }
 
 program.parse();
