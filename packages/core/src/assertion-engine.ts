@@ -119,10 +119,10 @@ export function parseScenario(yamlContent: string): ScenarioConfig {
  * impacts the trust score.
  */
 const WEIGHT_MULTIPLIER: Record<AssertionWeight, number> = {
-  critical: 40,
-  high: 25,
-  medium: 15,
-  low: 5,
+  critical: 30,
+  high: 20,
+  medium: 5,
+  low: 1,
 };
 
 /**

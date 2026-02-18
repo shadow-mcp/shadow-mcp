@@ -33,11 +33,22 @@ export function Header({ status, scenario, trustScore, passed, onReset, isLive, 
       {/* Logo */}
       <div className="flex items-center gap-2">
         <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-shadow-500 to-shadow-700 flex items-center justify-center text-white font-bold text-sm">
-          S
+          <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinejoin="round">
+            <path d="M12 3 L20 12 L12 21 L4 12 Z" opacity="0.9"/>
+            <circle cx="12" cy="12" r="1.5" fill="currentColor" stroke="none"/>
+          </svg>
         </div>
         <span className="font-semibold text-base tracking-tight">
           Shadow<span className="text-shadow-400">Console</span>
         </span>
+        <a
+          href="https://useshadow.dev"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-[9px] text-gray-600 hover:text-shadow-400 transition-colors ml-0.5 self-end mb-0.5"
+        >
+          useshadow.dev
+        </a>
       </div>
 
       {/* Live indicator */}

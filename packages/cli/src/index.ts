@@ -80,8 +80,12 @@ program
 
     // Launch console if requested
     if (opts.console) {
-      console.error(`\x1b[2m  Launching Shadow Console at http://localhost:${opts.port}\x1b[0m`);
-      // Console launch will be implemented when console package is built
+      console.error(`\x1b[33m  --console is not yet supported via the CLI.\x1b[0m`);
+      console.error(`\x1b[2m  To use the Console, run these in separate terminals:\x1b[0m`);
+      console.error(`\x1b[2m    1. node shadow-agent.js --scenario <file.yaml>\x1b[0m`);
+      console.error(`\x1b[2m    2. cd packages/console && npm run dev\x1b[0m`);
+      console.error(`\x1b[2m    3. Open http://localhost:3000/?ws=ws://localhost:3002\x1b[0m`);
+      console.error('');
     }
 
     // For now, start the server in stdio mode

@@ -4,6 +4,7 @@
   "description": "Shadow Console - localhost web dashboard for Shadow MCP",
   "type": "module",
   "private": true,
+  "license": "BSL-1.1",
   "scripts": {
     "build": "vite build",
     "dev": "vite",
