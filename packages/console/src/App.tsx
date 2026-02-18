@@ -19,7 +19,12 @@ export default function App() {
   }, [state]);
 
   // Auto-select the first active service if none is selected
-  const currentService = activeService || state.services[0] || 'slack';
+  // Preferred tab order: gmail first (primary use case), then slack, stripe
+  const SERVICE_ORDER = ['gmail', 'slack', 'stripe'];
+  const sortedServices = [...state.services].sort(
+    (a, b) => (SERVICE_ORDER.indexOf(a) ?? 99) - (SERVICE_ORDER.indexOf(b) ?? 99)
+  );
+  const currentService = activeService || sortedServices[0] || 'gmail';
 
   return (
     <div className="h-screen flex flex-col bg-gray-950 text-gray-100 overflow-hidden">
@@ -74,7 +79,7 @@ export default function App() {
             {activeTab === 'world' && state.services.length > 1 && (
               <>
                 <div className="w-px h-5 bg-gray-700 mx-1 self-center" />
-                {state.services.map(svc => (
+                {sortedServices.map(svc => (
                   <button
                     key={svc}
                     onClick={() => setActiveService(svc)}
@@ -105,7 +110,7 @@ export default function App() {
               isLive={isLive}
             />
           ) : (
-            <ReportPanel report={report} />
+            <ReportPanel report={report} toolCalls={state.toolCalls} riskEvents={state.riskEvents} />
           )}
         </div>
       </div>

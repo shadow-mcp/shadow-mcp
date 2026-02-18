@@ -1,10 +1,55 @@
-import type { ShadowReport } from '../types';
+import { useState } from 'react';
+import type { ShadowReport, ToolCall, RiskEvent } from '../types';
 
 interface ReportPanelProps {
   report: ShadowReport | null;
+  toolCalls?: ToolCall[];
+  riskEvents?: RiskEvent[];
 }
 
-export function ReportPanel({ report }: ReportPanelProps) {
+function generateScenarioYaml(report: ShadowReport, toolCalls: ToolCall[], riskEvents: RiskEvent[]): string {
+  const lines: string[] = [];
+  lines.push(`name: "Exported: ${report.scenario}"`);
+  lines.push(`description: "Auto-exported from Shadow Console session"`);
+  lines.push(`service: ${Object.keys(report.impactSummary.byService)[0] || 'slack'}`);
+  lines.push(`version: "1.0"`);
+  lines.push(`trust_threshold: ${report.threshold}`);
+  lines.push('');
+
+  // Add assertions from the report
+  lines.push('assertions:');
+  for (const r of report.assertions.results) {
+    lines.push(`  - expr: "${r.expr}"`);
+    lines.push(`    description: "${r.description}"`);
+    lines.push(`    weight: ${r.weight}`);
+  }
+  lines.push('');
+
+  // Add tool call log as comments for reference
+  lines.push('# Tool calls observed in this session:');
+  for (const tc of toolCalls.slice(0, 20)) {
+    const args = JSON.stringify(tc.arguments).slice(0, 80);
+    lines.push(`#   ${tc.tool_name}(${args})`);
+  }
+  if (toolCalls.length > 20) {
+    lines.push(`#   ... and ${toolCalls.length - 20} more`);
+  }
+  lines.push('');
+
+  // Add risk events as comments
+  const nonInfoRisks = riskEvents.filter(e => e.risk_level !== 'INFO');
+  if (nonInfoRisks.length > 0) {
+    lines.push('# Risk events detected:');
+    for (const e of nonInfoRisks) {
+      lines.push(`#   [${e.risk_level}] ${e.risk_reason || e.action} (${e.service})`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
+export function ReportPanel({ report, toolCalls = [], riskEvents = [] }: ReportPanelProps) {
+  const [toast, setToast] = useState<string | null>(null);
   if (!report) {
     return (
       <div className="flex-1 flex items-center justify-center text-gray-600 text-sm">
@@ -173,8 +218,34 @@ export function ReportPanel({ report }: ReportPanelProps) {
         </div>
       )}
 
+      {/* Copy as YAML */}
+      <div className="pt-2">
+        <button
+          onClick={() => {
+            const yaml = generateScenarioYaml(report, toolCalls, riskEvents);
+            navigator.clipboard.writeText(yaml).then(() => {
+              setToast('Scenario YAML copied to clipboard!');
+              setTimeout(() => setToast(null), 3000);
+            });
+          }}
+          className="w-full py-2.5 rounded-lg text-sm font-medium bg-shadow-600/20 text-shadow-300 ring-1 ring-shadow-500/30 hover:bg-shadow-600/30 transition-colors"
+        >
+          Copy as YAML
+        </button>
+        <p className="text-[10px] text-gray-600 text-center mt-1.5">
+          Save as a .yaml file to use as a regression test
+        </p>
+      </div>
+
+      {/* Toast */}
+      {toast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 px-4 py-2 bg-green-500/90 text-white text-sm font-medium rounded-lg shadow-lg z-50">
+          {toast}
+        </div>
+      )}
+
       <div className="text-center text-[10px] text-gray-700 pt-4 border-t border-gray-800/50">
-        Shadow MCP · shadowmcp.com
+        Shadow MCP · useshadow.dev
       </div>
     </div>
   );

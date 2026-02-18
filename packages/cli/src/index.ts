@@ -2,9 +2,10 @@
 
 import { Command } from 'commander';
 import { spawn, ChildProcess } from 'child_process';
-import { resolve, dirname } from 'path';
+import { resolve, dirname, extname } from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync, existsSync } from 'fs';
+import { createServer } from 'http';
 import {
   StateEngine,
   parseScenario,
@@ -155,6 +156,108 @@ program
         process.exit(0);
       });
     }
+  });
+
+// ── shadow demo ───────────────────────────────────────────────────────
+
+program
+  .command('demo')
+  .description('Run a scripted demo — no API key required')
+  .option('--port <port>', 'Console port', '3000')
+  .option('--ws-port <port>', 'WebSocket port', '3002')
+  .option('--no-open', 'Don\'t auto-open browser')
+  .action(async (opts) => {
+    console.error('');
+    console.error('\x1b[35m\x1b[1m  ◈ Shadow MCP Demo\x1b[0m');
+    console.error('\x1b[2m  A scripted simulation — no API key required.\x1b[0m');
+    console.error('');
+
+    const port = parseInt(opts.port, 10);
+    const wsPort = parseInt(opts.wsPort, 10);
+
+    // 1. Serve the Console static files
+    const consoleDist = resolve(__dirname, '..', '..', 'console', 'dist');
+    if (!existsSync(consoleDist)) {
+      console.error('\x1b[31m  Error: Console not built. Run `npm run build` first.\x1b[0m');
+      process.exit(1);
+    }
+
+    const MIME: Record<string, string> = {
+      '.html': 'text/html',
+      '.js': 'application/javascript',
+      '.css': 'text/css',
+      '.svg': 'image/svg+xml',
+      '.png': 'image/png',
+      '.ico': 'image/x-icon',
+      '.json': 'application/json',
+      '.woff': 'font/woff',
+      '.woff2': 'font/woff2',
+    };
+
+    const server = createServer((req, res) => {
+      const urlPath = req.url?.split('?')[0] || '/';
+      let filePath = resolve(consoleDist, urlPath === '/' ? 'index.html' : urlPath.slice(1));
+
+      if (!existsSync(filePath)) {
+        // SPA fallback
+        filePath = resolve(consoleDist, 'index.html');
+      }
+
+      try {
+        const content = readFileSync(filePath);
+        const ext = extname(filePath);
+        res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+        res.end(content);
+      } catch {
+        res.writeHead(404);
+        res.end('Not found');
+      }
+    });
+
+    server.listen(port, () => {
+      console.error(`\x1b[2m  Console: http://localhost:${port}\x1b[0m`);
+    });
+
+    // 2. Start the demo agent (which starts the proxy internally)
+    const demoAgentPath = resolve(__dirname, '..', 'demo-agent.cjs');
+    if (!existsSync(demoAgentPath)) {
+      console.error('\x1b[31m  Error: demo-agent.cjs not found.\x1b[0m');
+      process.exit(1);
+    }
+
+    const demoAgent = spawn('node', [demoAgentPath, `--ws-port=${wsPort}`], {
+      stdio: 'inherit',
+    });
+
+    // 3. Open browser after a short delay
+    if (opts.open !== false) {
+      setTimeout(async () => {
+        const url = `http://localhost:${port}/?ws=ws://localhost:${wsPort}`;
+        console.error(`\x1b[2m  Opening: ${url}\x1b[0m`);
+        console.error('');
+
+        // Cross-platform browser open
+        const { platform } = process;
+        const cmd = platform === 'darwin' ? 'open'
+          : platform === 'win32' ? 'start'
+          : 'xdg-open';
+        spawn(cmd, [url], { stdio: 'ignore', detached: true }).unref();
+      }, 3000);
+    }
+
+    // Graceful shutdown
+    const cleanup = () => {
+      server.close();
+      demoAgent.kill();
+      process.exit(0);
+    };
+    process.on('SIGINT', cleanup);
+    process.on('SIGTERM', cleanup);
+
+    demoAgent.on('exit', (code) => {
+      server.close();
+      process.exit(code || 0);
+    });
   });
 
 // ── shadow test ────────────────────────────────────────────────────────
