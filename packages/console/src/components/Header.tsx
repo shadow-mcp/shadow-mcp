@@ -7,9 +7,10 @@ interface HeaderProps {
   passed: boolean | null;
   onReset: () => void;
   isLive?: boolean;
+  onTrustClick?: () => void;
 }
 
-export function Header({ status, scenario, trustScore, passed, onReset, isLive }: HeaderProps) {
+export function Header({ status, scenario, trustScore, passed, onReset, isLive, onTrustClick }: HeaderProps) {
   // Derive display status from trust score when available
   const displayPassed = passed ?? (trustScore !== null ? trustScore >= 85 : null);
 
@@ -57,17 +58,20 @@ export function Header({ status, scenario, trustScore, passed, onReset, isLive }
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Trust Score Badge */}
+      {/* Trust Score Badge — clickable → Shadow Report */}
       {trustScore !== null && (
-        <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${
-          trustScore >= 90 ? 'bg-green-500/10 text-green-400 ring-1 ring-green-500/30' :
-          trustScore >= 70 ? 'bg-yellow-500/10 text-yellow-400 ring-1 ring-yellow-500/30' :
-          'bg-red-500/10 text-red-400 ring-1 ring-red-500/30'
-        }`}>
+        <button
+          onClick={onTrustClick}
+          className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold cursor-pointer hover:brightness-125 transition-all ${
+            trustScore >= 90 ? 'bg-green-500/10 text-green-400 ring-1 ring-green-500/30' :
+            trustScore >= 70 ? 'bg-yellow-500/10 text-yellow-400 ring-1 ring-yellow-500/30' :
+            'bg-red-500/10 text-red-400 ring-1 ring-red-500/30'
+          }`}
+        >
           <span className="text-xs uppercase tracking-wider opacity-70">Trust</span>
           <span className="text-base">{trustScore}</span>
           <span className="text-xs opacity-50">/100</span>
-        </div>
+        </button>
       )}
 
       {/* Status Indicator */}

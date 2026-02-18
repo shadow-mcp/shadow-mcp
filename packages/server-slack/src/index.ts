@@ -596,6 +596,75 @@ server.registerTool(
   }
 );
 
+// ── Hidden Tool: _shadow_inject (ShadowPlay) ──────────────────────────
+// NOT in the tool registry — invisible to the agent. The proxy calls it
+// directly to inject messages from the Console during interactive testing.
+// The agent discovers injected messages through normal get_channel_history.
+
+server.registerTool(
+  '_shadow_inject',
+  {
+    description: 'Inject a message as a simulated user (ShadowPlay)',
+    inputSchema: {
+      channel: z.string().describe('Channel name'),
+      user_name: z.string().describe('Display name of the simulated user'),
+      text: z.string().describe('Message text'),
+    },
+  },
+  async ({ channel, user_name, text }) => {
+    const resolved = resolveChannel(channel);
+    if (!resolved) {
+      return { isError: true, content: [{ type: 'text', text: JSON.stringify({ ok: false, error: 'channel_not_found' }) }] };
+    }
+
+    // Create or reuse a persona user for this display name
+    const safeName = user_name.toLowerCase().replace(/[^a-z0-9]/g, '.').replace(/\.+/g, '.').slice(0, 30);
+    const personaKey = `persona_${safeName}`;
+    let personaUserId = seed.users.get(personaKey);
+
+    if (!personaUserId) {
+      personaUserId = state.generateId('U');
+      seed.users.set(personaKey, personaUserId);
+
+      state.createObject('slack', 'user', personaUserId, {
+        name: safeName,
+        display_name: user_name,
+        email: `${safeName}@external.com`,
+        is_bot: false,
+        is_admin: false,
+        status: 'active',
+      });
+
+      state.executeRun(
+        'INSERT INTO slack_users (id, workspace_id, name, display_name, email, is_bot, is_admin, status, _created_at, _updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [personaUserId, seed.workspaceId, safeName, user_name, `${safeName}@external.com`, 0, 0, 'active', Date.now(), Date.now()]
+      );
+    }
+
+    const messageId = state.generateId('MSG');
+    const ts = `${Date.now()}.${Math.random().toString(36).slice(2, 8)}`;
+
+    state.createObject('slack', 'message', messageId, {
+      channel_id: resolved.id,
+      channel_name: resolved.name,
+      user_id: personaUserId,
+      text,
+      ts,
+      thread_ts: null,
+      is_external: resolved.is_external,
+    });
+
+    state.executeRun(
+      'INSERT INTO slack_messages (id, channel_id, user_id, text, ts, thread_ts, _created_at, _updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [messageId, resolved.id, personaUserId, text, ts, null, Date.now(), Date.now()]
+    );
+
+    return {
+      content: [{ type: 'text', text: JSON.stringify({ ok: true, channel: resolved.name, user: personaUserId, user_name, ts }) }],
+    };
+  }
+);
+
 // ── Export state for external use (CLI, Console) ───────────────────────
 
 export { state, seed, init };

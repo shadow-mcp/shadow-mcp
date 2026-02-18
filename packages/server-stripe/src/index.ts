@@ -419,6 +419,94 @@ server.registerTool(
   }
 );
 
+// ── Hidden Tool: _shadow_inject_event (ShadowPlay) ────────────────────
+// NOT in the tool registry — invisible to the agent. The proxy calls it
+// directly to inject financial events from the Console during interactive testing.
+
+server.registerTool(
+  '_shadow_inject_event',
+  {
+    description: 'Inject a financial event into the simulation (ShadowPlay)',
+    inputSchema: {
+      event_type: z.enum(['dispute_created', 'payment_failed']).describe('Type of event'),
+      charge_id: z.string().optional().describe('Charge ID (for dispute_created)'),
+      customer_id: z.string().optional().describe('Customer ID (for payment_failed)'),
+      amount: z.number().optional().describe('Amount in cents (for payment_failed)'),
+      reason: z.string().optional().describe('Reason (for dispute: fraudulent/duplicate/product_not_received)'),
+      description: z.string().optional().describe('Description (for payment_failed)'),
+    },
+  },
+  async ({ event_type, charge_id, customer_id, amount, reason, description }) => {
+    if (event_type === 'dispute_created') {
+      if (!charge_id) {
+        return { isError: true, content: [{ type: 'text', text: JSON.stringify({ ok: false, error: 'charge_id is required for dispute_created' }) }] };
+      }
+
+      const chargeObj = state.getObject(charge_id);
+      if (!chargeObj || chargeObj.type !== 'charge') {
+        return { isError: true, content: [{ type: 'text', text: JSON.stringify({ ok: false, error: `No such charge: '${charge_id}'` }) }] };
+      }
+
+      const disputeId = state.generateId('dp');
+      const disputeReason = reason || 'fraudulent';
+      const disputeAmount = Number(chargeObj.data.amount);
+
+      state.createObject('stripe', 'dispute', disputeId, {
+        charge_id,
+        amount: disputeAmount,
+        currency: chargeObj.data.currency,
+        status: 'needs_response',
+        reason: disputeReason,
+      });
+
+      state.executeRun(
+        'INSERT INTO stripe_disputes (id, charge_id, amount, currency, status, reason, _created_at, _updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [disputeId, charge_id, disputeAmount, chargeObj.data.currency, 'needs_response', disputeReason, Date.now(), Date.now()]
+      );
+
+      return {
+        content: [{ type: 'text', text: JSON.stringify({ ok: true, id: disputeId, charge_id, amount: disputeAmount, reason: disputeReason }) }],
+      };
+    }
+
+    if (event_type === 'payment_failed') {
+      if (!customer_id) {
+        return { isError: true, content: [{ type: 'text', text: JSON.stringify({ ok: false, error: 'customer_id is required for payment_failed' }) }] };
+      }
+
+      const customerObj = state.getObject(customer_id);
+      if (!customerObj || customerObj.type !== 'customer') {
+        return { isError: true, content: [{ type: 'text', text: JSON.stringify({ ok: false, error: `No such customer: '${customer_id}'` }) }] };
+      }
+
+      const chargeId = state.generateId('ch');
+      const failedAmount = amount || 5000; // default $50
+
+      state.createObject('stripe', 'charge', chargeId, {
+        customer_id,
+        amount: failedAmount,
+        currency: 'usd',
+        status: 'failed',
+        description: description || 'Payment failed',
+        refunded: false,
+        amount_refunded: 0,
+        metadata: {},
+      });
+
+      state.executeRun(
+        'INSERT INTO stripe_charges (id, customer_id, amount, currency, status, description, refunded, amount_refunded, metadata, _created_at, _updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        [chargeId, customer_id, failedAmount, 'usd', 'failed', description || 'Payment failed', 0, 0, '{}', Date.now(), Date.now()]
+      );
+
+      return {
+        content: [{ type: 'text', text: JSON.stringify({ ok: true, id: chargeId, customer_id, amount: failedAmount, status: 'failed' }) }],
+      };
+    }
+
+    return { isError: true, content: [{ type: 'text', text: JSON.stringify({ ok: false, error: `Unknown event_type: ${event_type}` }) }] };
+  }
+);
+
 // ── Export & Start ─────────────────────────────────────────────────────
 
 export { state };

@@ -21,6 +21,31 @@ export interface ChaosCommand {
   chaos: string;  // api_outage | angry_customer | rate_limit | prompt_injection | data_corruption | latency
 }
 
+export interface InjectMessageCommand {
+  type: 'inject_message';
+  channel: string;
+  user_name: string;
+  text: string;
+}
+
+export interface InjectEmailCommand {
+  type: 'inject_email';
+  from_name: string;
+  from_email: string;
+  subject: string;
+  body: string;
+}
+
+export interface InjectStripeEventCommand {
+  type: 'inject_stripe_event';
+  event_type: 'dispute_created' | 'payment_failed';
+  charge_id?: string;
+  customer_id?: string;
+  amount?: number;
+  reason?: string;
+  description?: string;
+}
+
 export class EventBus extends EventEmitter {
   private wss: WebSocketServer | null = null;
   private clients: Set<WebSocket> = new Set();
@@ -48,6 +73,18 @@ export class EventBus extends EventEmitter {
           if (msg.type === 'chaos' && msg.chaos) {
             console.error(`[Shadow] Chaos injected from Console: ${msg.chaos}`);
             this.emit('chaos', msg as ChaosCommand);
+          }
+          if (msg.type === 'inject_message' && msg.channel && msg.text) {
+            console.error(`[Shadow] ShadowPlay: ${msg.user_name} → #${msg.channel}`);
+            this.emit('inject_message', msg as InjectMessageCommand);
+          }
+          if (msg.type === 'inject_email' && msg.subject) {
+            console.error(`[Shadow] ShadowPlay: ${msg.from_name} → inbox (${msg.subject})`);
+            this.emit('inject_email', msg as InjectEmailCommand);
+          }
+          if (msg.type === 'inject_stripe_event' && msg.event_type) {
+            console.error(`[Shadow] ShadowPlay: Stripe ${msg.event_type}`);
+            this.emit('inject_stripe_event', msg as InjectStripeEventCommand);
           }
         } catch {
           // Not valid JSON, skip

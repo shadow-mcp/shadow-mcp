@@ -450,6 +450,57 @@ server.registerTool(
   }
 );
 
+// ── Hidden Tool: _shadow_inject_email (ShadowPlay) ────────────────────
+// NOT in the tool registry — invisible to the agent. The proxy calls it
+// directly to inject emails from the Console during interactive testing.
+// The agent discovers injected emails through normal list_messages.
+
+server.registerTool(
+  '_shadow_inject_email',
+  {
+    description: 'Inject an incoming email as a simulated sender (ShadowPlay)',
+    inputSchema: {
+      from_name: z.string().describe('Sender display name'),
+      from_email: z.string().describe('Sender email address'),
+      subject: z.string().describe('Email subject'),
+      body: z.string().describe('Email body'),
+      label_ids: z.array(z.string()).optional().describe('Labels (default: ["INBOX"])'),
+    },
+  },
+  async ({ from_name, from_email, subject, body, label_ids }) => {
+    const msgId = state.generateId('msg');
+    const threadId = state.generateId('thread');
+    const labels = label_ids || ['INBOX'];
+    const internalDate = Date.now();
+
+    state.createObject('gmail', 'email', msgId, {
+      thread_id: threadId,
+      from_email,
+      from_name,
+      to_emails: 'me@acmecorp.com',
+      cc_emails: null,
+      subject,
+      body,
+      snippet: body.slice(0, 100),
+      label_ids: labels,
+      is_read: false,
+      is_starred: false,
+      has_attachments: false,
+      attachment_names: null,
+      internal_date: internalDate,
+    });
+
+    state.executeRun(
+      'INSERT INTO gmail_messages (id, thread_id, from_email, from_name, to_emails, cc_emails, subject, body, snippet, label_ids, is_read, is_starred, has_attachments, attachment_names, internal_date, _created_at, _updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [msgId, threadId, from_email, from_name, 'me@acmecorp.com', null, subject, body, body.slice(0, 100), JSON.stringify(labels), 0, 0, 0, null, internalDate, Date.now(), Date.now()]
+    );
+
+    return {
+      content: [{ type: 'text', text: JSON.stringify({ ok: true, id: msgId, from: `${from_name} <${from_email}>`, subject, internal_date: internalDate }) }],
+    };
+  }
+);
+
 // ── Export & Start ─────────────────────────────────────────────────────
 
 export { state };

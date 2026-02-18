@@ -7,7 +7,7 @@ import { ReportPanel } from './components/ReportPanel';
 import { ChaosToolbar } from './components/ChaosToolbar';
 
 export default function App() {
-  const { state, reset, isLive, sendChaos } = useSimulation();
+  const { state, reset, isLive, sendChaos, sendInjectMessage, sendInjectEmail, sendInjectStripeEvent } = useSimulation();
   const [activeTab, setActiveTab] = useState<'world' | 'report'>('world');
   const [activeService, setActiveService] = useState<string | null>(null);
 
@@ -30,6 +30,7 @@ export default function App() {
         passed={report?.passed ?? null}
         onReset={reset}
         isLive={isLive}
+        onTrustClick={() => setActiveTab('report')}
       />
 
       <ChaosToolbar isLive={isLive} onInject={sendChaos} />
@@ -98,6 +99,10 @@ export default function App() {
               slackChannels={state.slackChannels}
               stripeOperations={state.stripeOperations}
               gmailEmails={state.gmailEmails}
+              onSendMessage={sendInjectMessage}
+              onSendEmail={sendInjectEmail}
+              onSendStripeEvent={sendInjectStripeEvent}
+              isLive={isLive}
             />
           ) : (
             <ReportPanel report={report} />
