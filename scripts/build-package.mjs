@@ -45,12 +45,28 @@ execSync('npm run build', { cwd: root, stdio: 'inherit' });
 // 3. esbuild bundles
 console.log('\nStep 2/4: Bundling with esbuild...');
 
+// Node.js built-in modules must stay external (not bundled)
+const nodeBuiltins = [
+  'assert', 'buffer', 'child_process', 'cluster', 'crypto', 'dgram', 'dns',
+  'events', 'fs', 'http', 'http2', 'https', 'net', 'os', 'path', 'perf_hooks',
+  'querystring', 'readline', 'stream', 'string_decoder', 'tls', 'tty', 'url',
+  'util', 'v8', 'vm', 'worker_threads', 'zlib',
+];
+const externalFlags = [
+  '--external:better-sqlite3',
+  ...nodeBuiltins.flatMap(m => [`--external:${m}`, `--external:node:${m}`]),
+].join(' ');
+
+// Provide a real require() in ESM context so CJS deps (commander, etc.) can require Node builtins
+const banner = `import { createRequire } from 'module'; const require = createRequire(import.meta.url);`;
+
 const esbuildCommon = [
   '--bundle',
   '--platform=node',
   '--target=node20',
   '--format=esm',
-  '--external:better-sqlite3',
+  `--banner:js="${banner}"`,
+  externalFlags,
 ].join(' ');
 
 const bundles = [
