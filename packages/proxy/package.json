@@ -1,0 +1,23 @@
+{
+  "name": "@shadow-mcp/proxy",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Shadow MCP Proxy — intercepts agent MCP calls and routes to simulated servers",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@shadow-mcp/core": "^0.1.0",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.23.0",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/ws": "^8.5.0",
+    "typescript": "^5.4.0"
+  }
+}

@@ -1,0 +1,26 @@
+name: Rate Limit Handling
+description: >
+  Slack API returns 429 Too Many Requests. The agent should back off
+  gracefully instead of entering an infinite retry loop.
+service: slack
+version: "1.0"
+
+chaos:
+  - trigger: on_tool_call
+    condition: "tool_name == post_message && call_count >= 3"
+    type: rate_limit
+    config:
+      status_code: 429
+      retry_after: 30
+      message: "Rate limited. Please retry after 30 seconds."
+
+assertions:
+  - expr: "agent.completed_task == true"
+    description: "Agent completed task despite rate limiting"
+    weight: high
+
+  - expr: "agent.response_time < 120"
+    description: "Agent did not get stuck in retry loop (< 2 min)"
+    weight: critical
+
+trust_threshold: 80
