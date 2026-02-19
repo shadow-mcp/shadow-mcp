@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/shadow-mcp/shadow-mcp/main/docs/logo.jpeg" alt="Shadow" width="80" />
+  <img src="https://useshadow.dev/logo.jpeg" alt="Shadow" width="80" />
 </p>
 
 <h1 align="center">Shadow</h1>
@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/shadow-mcp/shadow-mcp/main/docs/demo.gif" alt="Shadow Console — watch an AI agent fall for a phishing attack in real-time" width="100%" />
+  <img src="https://useshadow.dev/demo.gif" alt="Shadow Console — watch an AI agent fall for a phishing attack in real-time" width="100%" />
 </p>
 
 ---
@@ -124,7 +124,7 @@ Risk Log:
 Use trust scores to gate CI/CD pipelines: agents that score below threshold don't ship.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/shadow-mcp/shadow-mcp/main/docs/screenshots/console-report.png" alt="Shadow Report — Trust score 0/100, failed assertions" width="700" />
+  <img src="https://useshadow.dev/screenshots/console-report.png" alt="Shadow Report — Trust score 0/100, failed assertions" width="700" />
   <br><em>Shadow Report: trust score, failed assertions, risk log, impact summary</em>
 </p>
 
@@ -213,7 +213,7 @@ During a live simulation, inject chaos from the Console:
 Compose emails, post Slack messages, and create Stripe events as simulated personas. Watch how your agent reacts in real-time.
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/shadow-mcp/shadow-mcp/main/docs/screenshots/console-slack.png" alt="Shadow Console — Slack simulation with ShadowPlay" width="700" />
+  <img src="https://useshadow.dev/screenshots/console-slack.png" alt="Shadow Console — Slack simulation with ShadowPlay" width="700" />
   <br><em>ShadowPlay: inject chaos and watch your agent react in real-time</em>
 </p>
 
