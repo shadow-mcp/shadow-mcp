@@ -262,9 +262,11 @@ program
     process.on('SIGINT', cleanup);
     process.on('SIGTERM', cleanup);
 
-    demoAgent.on('exit', (code) => {
-      server.close();
-      process.exit(code || 0);
+    demoAgent.on('exit', () => {
+      // Keep console + WS server alive so users can still browse the demo.
+      // The EventBus replays all events to new connections.
+      console.error('');
+      console.error('\x1b[2m  Demo complete — console still running. Press Ctrl+C to exit.\x1b[0m');
     });
   });
 

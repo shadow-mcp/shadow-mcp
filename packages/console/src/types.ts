@@ -53,7 +53,7 @@ export interface ShadowReport {
     totalToolCalls: number;
     byService: Record<string, number>;
     messages?: { total: number; external: number; internal: number };
-    emails?: { drafted: number; withAttachments: number };
+    emails?: { sent: number; drafted: number; withAttachments: number };
     financial?: { charges: number; totalCharged: number; refunds: number; totalRefunded: number };
     destructiveActions: number;
     dataExposureEvents: number;

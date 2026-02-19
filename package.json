@@ -1,6 +1,6 @@
 {
   "name": "shadow-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "The staging environment for AI agents. Rehearse every action before it hits production.",
   "workspaces": [

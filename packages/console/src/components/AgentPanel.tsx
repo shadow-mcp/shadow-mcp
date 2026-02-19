@@ -1,42 +1,74 @@
+import { useEffect, useRef } from 'react';
 import type { ToolCall, RiskEvent } from '../types';
 
 interface AgentPanelProps {
   toolCalls: ToolCall[];
   riskEvents: RiskEvent[];
+  viewingIndex?: number;
 }
 
-export function AgentPanel({ toolCalls, riskEvents }: AgentPanelProps) {
+export function AgentPanel({ toolCalls, riskEvents, viewingIndex }: AgentPanelProps) {
+  // When viewingIndex is provided, only show tool calls up to that step
+  const visibleToolCalls = viewingIndex !== undefined
+    ? toolCalls.slice(0, viewingIndex + 1)
+    : toolCalls;
+
+  // Only show risk events that occurred at or before the viewed tool call's timestamp
+  const cutoffTime = viewingIndex !== undefined && visibleToolCalls.length > 0
+    ? visibleToolCalls[visibleToolCalls.length - 1].timestamp + 1
+    : Infinity;
+
+  const visibleRisks = riskEvents.filter(e => e.timestamp <= cutoffTime);
+
   // Merge tool calls and risk events into a unified timeline
   const timeline = [
-    ...toolCalls.map(tc => ({ type: 'tool' as const, timestamp: tc.timestamp, data: tc })),
-    ...riskEvents.filter(e => e.risk_level !== 'INFO' && e.object_type !== 'chaos_injection').map(e => ({ type: 'risk' as const, timestamp: e.timestamp, data: e })),
-    ...riskEvents.filter(e => e.object_type === 'chaos_injection').map(e => ({ type: 'chaos' as const, timestamp: e.timestamp, data: e })),
+    ...visibleToolCalls.map((tc, idx) => ({ type: 'tool' as const, timestamp: tc.timestamp, data: tc, stepIndex: idx })),
+    ...visibleRisks.filter(e => e.risk_level !== 'INFO' && e.object_type !== 'chaos_injection').map(e => ({ type: 'risk' as const, timestamp: e.timestamp, data: e, stepIndex: -1 })),
+    ...visibleRisks.filter(e => e.object_type === 'chaos_injection').map(e => ({ type: 'chaos' as const, timestamp: e.timestamp, data: e, stepIndex: -1 })),
   ].sort((a, b) => b.timestamp - a.timestamp);
 
+  // Auto-scroll to keep the current step visible
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const currentStepRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    currentStepRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [viewingIndex]);
+
+  const currentIdx = viewingIndex ?? -1;
+
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-3">
+    <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
       {timeline.length === 0 && (
         <div className="flex items-center justify-center h-full text-gray-600 text-sm">
           Waiting for agent activity...
         </div>
       )}
 
-      {timeline.map((item, i) => (
-        <div key={i} className="fade-in">
-          {item.type === 'tool' ? (
-            <ToolCallEntry call={item.data} />
-          ) : item.type === 'chaos' ? (
-            <ChaosEventEntry event={item.data} />
-          ) : (
-            <RiskEventEntry event={item.data} />
-          )}
-        </div>
-      ))}
+      {timeline.map((item, i) => {
+        const isCurrent = item.type === 'tool' && item.stepIndex === currentIdx;
+        return (
+          <div
+            key={i}
+            ref={isCurrent ? currentStepRef : undefined}
+            className={`fade-in transition-opacity ${
+              item.type === 'tool' && item.stepIndex !== currentIdx ? 'opacity-40' : ''
+            }`}
+          >
+            {item.type === 'tool' ? (
+              <ToolCallEntry call={item.data} highlighted={isCurrent} />
+            ) : item.type === 'chaos' ? (
+              <ChaosEventEntry event={item.data} />
+            ) : (
+              <RiskEventEntry event={item.data} />
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-function ToolCallEntry({ call }: { call: ToolCall }) {
+function ToolCallEntry({ call, highlighted }: { call: ToolCall; highlighted?: boolean }) {
   const serviceColors: Record<string, string> = {
     slack: 'text-purple-400 bg-purple-400/10',
     stripe: 'text-blue-400 bg-blue-400/10',
@@ -46,7 +78,11 @@ function ToolCallEntry({ call }: { call: ToolCall }) {
   const colorClass = serviceColors[call.service] || 'text-gray-400 bg-gray-400/10';
 
   return (
-    <div className="rounded-lg bg-gray-900/50 border border-gray-800 p-3">
+    <div className={`rounded-lg p-3 ${
+      highlighted
+        ? 'bg-gray-900/80 border-2 border-shadow-500/50 ring-1 ring-shadow-500/20'
+        : 'bg-gray-900/50 border border-gray-800'
+    }`}>
       <div className="flex items-center gap-2 mb-2">
         <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${colorClass}`}>
           {call.service}

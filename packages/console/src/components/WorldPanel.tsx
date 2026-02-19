@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import type { SlackChannel, StripeOperation, GmailEmail } from '../types';
+import type { SlackChannel, StripeOperation, GmailEmail, ToolCall } from '../types';
 
 interface WorldPanelProps {
   service: string;
@@ -10,12 +10,15 @@ interface WorldPanelProps {
   onSendEmail?: (fromName: string, fromEmail: string, subject: string, body: string) => void;
   onSendStripeEvent?: (eventType: string, chargeId?: string, customerId?: string, amount?: number, reason?: string) => void;
   isLive?: boolean;
+  onUserInteraction?: () => void;
+  lastToolCall?: ToolCall | null;
+  toolCallCount?: number;
 }
 
-export function WorldPanel({ service, slackChannels, stripeOperations, gmailEmails, onSendMessage, onSendEmail, onSendStripeEvent, isLive }: WorldPanelProps) {
-  if (service === 'slack') return <SlackWorld channels={slackChannels} onSendMessage={onSendMessage} isLive={isLive} />;
-  if (service === 'stripe') return <StripeWorld operations={stripeOperations} onSendStripeEvent={onSendStripeEvent} isLive={isLive} />;
-  if (service === 'gmail') return <GmailWorld emails={gmailEmails} onSendEmail={onSendEmail} isLive={isLive} />;
+export function WorldPanel({ service, slackChannels, stripeOperations, gmailEmails, onSendMessage, onSendEmail, onSendStripeEvent, isLive, onUserInteraction, lastToolCall, toolCallCount }: WorldPanelProps) {
+  if (service === 'slack') return <SlackWorld channels={slackChannels} onSendMessage={onSendMessage} isLive={isLive} onUserInteraction={onUserInteraction} lastToolCall={lastToolCall} toolCallCount={toolCallCount} />;
+  if (service === 'stripe') return <StripeWorld operations={stripeOperations} onSendStripeEvent={onSendStripeEvent} isLive={isLive} onUserInteraction={onUserInteraction} lastToolCall={lastToolCall} toolCallCount={toolCallCount} />;
+  if (service === 'gmail') return <GmailWorld emails={gmailEmails} onSendEmail={onSendEmail} isLive={isLive} onUserInteraction={onUserInteraction} lastToolCall={lastToolCall} toolCallCount={toolCallCount} />;
   return <div className="flex-1 flex items-center justify-center text-gray-600">Waiting for agent activity...</div>;
 }
 
@@ -30,10 +33,13 @@ const PERSONAS = [
   'New Employee',
 ];
 
-function SlackWorld({ channels, onSendMessage, isLive }: {
+function SlackWorld({ channels, onSendMessage, isLive, onUserInteraction, lastToolCall, toolCallCount }: {
   channels: SlackChannel[];
   onSendMessage?: (channel: string, userName: string, text: string) => void;
   isLive?: boolean;
+  onUserInteraction?: () => void;
+  lastToolCall?: ToolCall | null;
+  toolCallCount?: number;
 }) {
   const [activeChannel, setActiveChannel] = useState(channels[1]?.name || channels[0]?.name || '');
   const [message, setMessage] = useState('');
@@ -41,6 +47,22 @@ function SlackWorld({ channels, onSendMessage, isLive }: {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const active = channels.find(c => c.name === activeChannel) || channels[0];
+
+  // Auto-navigate to the channel the agent is acting on
+  useEffect(() => {
+    if (!lastToolCall || lastToolCall.service !== 'slack') return;
+    const channel = String(lastToolCall.arguments?.channel || '');
+    if (channel && ['post_message', 'get_channel_history', 'incoming_message'].includes(lastToolCall.tool_name)) {
+      setActiveChannel(channel);
+    } else if (lastToolCall.tool_name === 'send_direct_message') {
+      const user = String(lastToolCall.arguments?.user || 'unknown');
+      setActiveChannel(`DM: ${user}`);
+    } else if (lastToolCall.tool_name === 'list_channels' && channels.length > 0) {
+      // Show #clients if available (most common use case), else first channel
+      const clients = channels.find(c => c.name === 'clients');
+      setActiveChannel(clients ? 'clients' : channels[0].name);
+    }
+  }, [toolCallCount, lastToolCall]);
 
   // Auto-scroll to newest message
   useEffect(() => {
@@ -71,7 +93,7 @@ function SlackWorld({ channels, onSendMessage, isLive }: {
           {channels.map(ch => (
             <button
               key={ch.id}
-              onClick={() => setActiveChannel(ch.name)}
+              onClick={() => { setActiveChannel(ch.name); onUserInteraction?.(); }}
               className={`w-full px-3 py-1 text-left text-sm flex items-center gap-1.5 transition-colors ${
                 activeChannel === ch.name
                   ? 'bg-[#1164a3] text-white'
@@ -141,18 +163,15 @@ function SlackWorld({ channels, onSendMessage, isLive }: {
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-[10px] text-shadow-400 font-semibold uppercase tracking-wider">ShadowPlay</span>
                   <span className="text-[10px] text-gray-600">Inject a message as:</span>
-                  <input
-                    list="slack-personas"
+                  <select
                     value={persona}
                     onChange={e => setPersona(e.target.value)}
-                    placeholder="Persona name..."
                     className="text-xs bg-gray-800 text-gray-300 rounded px-2 py-1 border border-gray-700 outline-none focus:border-shadow-500 w-44"
-                  />
-                  <datalist id="slack-personas">
+                  >
                     {PERSONAS.map(p => (
-                      <option key={p} value={p} />
+                      <option key={p} value={p}>{p}</option>
                     ))}
-                  </datalist>
+                  </select>
                 </div>
                 <div className="flex gap-2">
                   <input
@@ -196,11 +215,11 @@ function stripeTypeForNav(nav: string): string | null {
 }
 
 function stripeStatusIcon(op: StripeOperation) {
-  if (op.type === 'refund') return '↺';
-  if (op.type === 'dispute') return '⚠';
-  if (op.type === 'customer') return '●';
-  if (op.data.status === 'failed') return '✗';
-  return '✓';
+  if (op.type === 'refund') return '\u21BA';
+  if (op.type === 'dispute') return '\u26A0';
+  if (op.type === 'customer') return '\u25CF';
+  if (op.data.status === 'failed') return '\u2717';
+  return '\u2713';
 }
 
 function stripeStatusColor(op: StripeOperation) {
@@ -224,10 +243,13 @@ function formatDollars(cents: number): string {
   return '$' + (cents / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function StripeWorld({ operations, onSendStripeEvent, isLive }: {
+function StripeWorld({ operations, onSendStripeEvent, isLive, onUserInteraction, lastToolCall, toolCallCount }: {
   operations: StripeOperation[];
   onSendStripeEvent?: (eventType: string, chargeId?: string, customerId?: string, amount?: number, reason?: string) => void;
   isLive?: boolean;
+  onUserInteraction?: () => void;
+  lastToolCall?: ToolCall | null;
+  toolCallCount?: number;
 }) {
   const [activeNav, setActiveNav] = useState<string>('All');
   const [expandedOp, setExpandedOp] = useState<string | null>(null);
@@ -239,6 +261,34 @@ function StripeWorld({ operations, onSendStripeEvent, isLive }: {
 
   const charges = operations.filter(op => op.type === 'charge' && op.data.status !== 'failed');
   const customers = operations.filter(op => op.type === 'customer');
+
+  // Step-based navigation: expand the operation matching the current step's tool call
+  useEffect(() => {
+    if (!lastToolCall || lastToolCall.service !== 'stripe') return;
+    const opType = lastToolCall.tool_name.replace('create_', '');
+    if (['charge', 'refund', 'customer', 'dispute'].includes(opType)) {
+      // Find the matching operation by looking at response id
+      const responseId = (lastToolCall.response as Record<string, unknown>)?.id
+        || ((lastToolCall.response as Record<string, unknown>)?.content as Array<{ text: string }>)?.[0]?.text;
+      let parsedId: string | undefined;
+      if (responseId && typeof responseId === 'string' && !responseId.startsWith('{')) {
+        parsedId = responseId;
+      } else if (typeof responseId === 'string') {
+        try { parsedId = JSON.parse(responseId).id; } catch { /* ignore */ }
+      }
+      if (parsedId) {
+        setExpandedOp(parsedId);
+        // Switch nav to relevant section
+        if (opType === 'charge' || opType === 'refund') setActiveNav('Payments');
+        else if (opType === 'customer') setActiveNav('Customers');
+        else if (opType === 'dispute') setActiveNav('Disputes');
+      }
+    } else if (lastToolCall.tool_name === 'list_charges') {
+      setActiveNav('Payments');
+    } else if (lastToolCall.tool_name === 'list_customers') {
+      setActiveNav('Customers');
+    }
+  }, [toolCallCount, lastToolCall]);
 
   // Counts per nav
   const navCounts: Record<string, number> = {
@@ -286,7 +336,7 @@ function StripeWorld({ operations, onSendStripeEvent, isLive }: {
       <div className="w-52 bg-[#0a2540] border-r border-blue-900/50 flex flex-col shrink-0">
         <div className="p-3 border-b border-blue-900/50">
           <div className="font-semibold text-sm text-white flex items-center gap-1.5">
-            <span className="text-blue-400">⟐</span> Stripe
+            <span className="text-blue-400">{'\u27D0'}</span> Stripe
           </div>
           <div className="text-[10px] text-green-400 flex items-center gap-1 mt-0.5">
             <div className="w-1.5 h-1.5 rounded-full bg-green-400" />
@@ -297,7 +347,7 @@ function StripeWorld({ operations, onSendStripeEvent, isLive }: {
           {STRIPE_NAV.map(nav => (
             <button
               key={nav}
-              onClick={() => setActiveNav(nav)}
+              onClick={() => { setActiveNav(nav); onUserInteraction?.(); }}
               className={`w-full px-3 py-1.5 text-left text-sm flex items-center justify-between transition-colors ${
                 activeNav === nav
                   ? 'bg-blue-500/20 text-blue-300'
@@ -357,7 +407,7 @@ function StripeWorld({ operations, onSendStripeEvent, isLive }: {
               {sorted.map(op => (
                 <div key={op.id}>
                   <div
-                    onClick={() => setExpandedOp(expandedOp === op.id ? null : op.id)}
+                    onClick={() => { setExpandedOp(expandedOp === op.id ? null : op.id); onUserInteraction?.(); }}
                     className="flex items-center gap-3 px-3 py-2.5 hover:bg-blue-500/5 transition-colors cursor-pointer"
                   >
                     <span className={`text-sm w-5 text-center ${stripeStatusColor(op).split(' ')[0]}`}>
@@ -503,12 +553,12 @@ const GMAIL_PERSONAS = [
 type GmailLabel = 'INBOX' | 'STARRED' | 'SENT' | 'DRAFT' | 'SPAM' | 'TRASH';
 
 const GMAIL_LABELS: { key: GmailLabel; label: string; icon: string }[] = [
-  { key: 'INBOX', label: 'Inbox', icon: '📥' },
-  { key: 'STARRED', label: 'Starred', icon: '☆' },
-  { key: 'SENT', label: 'Sent', icon: '➤' },
-  { key: 'DRAFT', label: 'Drafts', icon: '📝' },
-  { key: 'SPAM', label: 'Spam', icon: '⚠' },
-  { key: 'TRASH', label: 'Trash', icon: '🗑' },
+  { key: 'INBOX', label: 'Inbox', icon: '\uD83D\uDCE5' },
+  { key: 'STARRED', label: 'Starred', icon: '\u2606' },
+  { key: 'SENT', label: 'Sent', icon: '\u27A4' },
+  { key: 'DRAFT', label: 'Drafts', icon: '\uD83D\uDCDD' },
+  { key: 'SPAM', label: 'Spam', icon: '\u26A0' },
+  { key: 'TRASH', label: 'Trash', icon: '\uD83D\uDDD1' },
 ];
 
 function gmailLabelCount(emails: GmailEmail[], label: GmailLabel): number {
@@ -522,10 +572,13 @@ function gmailFilterByLabel(emails: GmailEmail[], label: GmailLabel): GmailEmail
   return emails.filter(e => e.labels.includes(label));
 }
 
-function GmailWorld({ emails, onSendEmail, isLive }: {
+function GmailWorld({ emails, onSendEmail, isLive, onUserInteraction, lastToolCall, toolCallCount }: {
   emails: GmailEmail[];
   onSendEmail?: (fromName: string, fromEmail: string, subject: string, body: string) => void;
   isLive?: boolean;
+  onUserInteraction?: () => void;
+  lastToolCall?: ToolCall | null;
+  toolCallCount?: number;
 }) {
   const [selectedEmail, setSelectedEmail] = useState<GmailEmail | null>(null);
   const [activeLabel, setActiveLabel] = useState<GmailLabel>('INBOX');
@@ -537,6 +590,58 @@ function GmailWorld({ emails, onSendEmail, isLive }: {
   const [fromField, setFromField] = useState(GMAIL_PERSONAS[0].name);
   const [emailSubject, setEmailSubject] = useState('');
   const [emailBody, setEmailBody] = useState('');
+
+  // Auto-navigate: update Dome view based on current step's tool call
+  useEffect(() => {
+    if (!lastToolCall || lastToolCall.service !== 'gmail') return;
+    if (lastToolCall.tool_name === 'get_message') {
+      const msgId = String(lastToolCall.arguments?.message_id || '');
+      if (msgId) {
+        const email = emails.find(e => e.id === msgId);
+        if (email) {
+          if (email.labels.includes('SENT')) {
+            setActiveLabel('SENT');
+          } else if (email.labels.includes('DRAFT')) {
+            setActiveLabel('DRAFT');
+          } else {
+            setActiveLabel('INBOX');
+          }
+          setSelectedEmail(email);
+        }
+      }
+    } else if (lastToolCall.tool_name === 'list_messages') {
+      setActiveLabel('INBOX');
+      setSelectedEmail(null);
+    } else if (lastToolCall.tool_name === 'send_email') {
+      const to = String(lastToolCall.arguments?.to || '');
+      const subject = String(lastToolCall.arguments?.subject || '');
+      const fromArg = String(lastToolCall.arguments?.from || '');
+
+      // If sent TO the agent (incoming/inject), show in INBOX
+      const isIncoming = to.includes('agent@') || fromArg.includes('security') || fromArg.includes('external');
+      if (isIncoming) {
+        setActiveLabel('INBOX');
+        const inboxEmails = emails.filter(e => !e.labels.includes('SENT') && !e.labels.includes('DRAFT'));
+        const match = inboxEmails.find(e =>
+          (subject && e.subject.includes(subject)) || (fromArg && e.from.includes(fromArg))
+        );
+        setSelectedEmail(match || null);
+      } else {
+        // Agent sending outbound — show SENT
+        setActiveLabel('SENT');
+        const sentEmails = emails.filter(e => e.labels.includes('SENT'));
+        const match = sentEmails.find(e =>
+          (to && e.to.includes(to)) || (subject && e.subject.includes(subject))
+        );
+        setSelectedEmail(match || sentEmails[sentEmails.length - 1] || null);
+      }
+    } else if (lastToolCall.tool_name === 'create_draft') {
+      setActiveLabel('DRAFT');
+      setSelectedEmail(null);
+    } else if (lastToolCall.tool_name === 'delete_message') {
+      setSelectedEmail(null);
+    }
+  }, [toolCallCount, lastToolCall, emails.length]);
 
   const openCompose = (reply?: GmailEmail) => {
     if (reply) {
@@ -581,7 +686,12 @@ function GmailWorld({ emails, onSendEmail, isLive }: {
       <div className="w-52 bg-gray-50 border-r border-gray-200 flex flex-col shrink-0 overflow-hidden">
         <div className="p-3 border-b border-gray-200">
           <div className="font-semibold text-sm text-gray-800 flex items-center gap-1.5">
-            <span className="text-red-500">✉</span> Gmail
+            <svg viewBox="0 0 24 24" className="w-5 h-5 shrink-0" fill="none">
+              <path d="M2 6a2 2 0 0 1 2-4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6z" fill="#fff" stroke="#d1d5db" strokeWidth="0.5"/>
+              <path d="M2 6l10 7 10-7" stroke="#EA4335" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M2 6v12h2V8l8 5.5L20 8v10h2V6l-10 7L2 6z" fill="#EA4335" fillOpacity="0.15"/>
+            </svg>
+            Gmail
           </div>
           <div className="text-[10px] text-green-600 flex items-center gap-1 mt-0.5">
             <div className="w-1.5 h-1.5 rounded-full bg-green-500" />
@@ -611,7 +721,7 @@ function GmailWorld({ emails, onSendEmail, isLive }: {
             return (
               <button
                 key={key}
-                onClick={() => { setActiveLabel(key); setSelectedEmail(null); }}
+                onClick={() => { setActiveLabel(key); setSelectedEmail(null); onUserInteraction?.(); }}
                 className={`w-full px-3 py-1.5 text-left text-sm flex items-center gap-2 rounded-r-full mr-2 transition-colors ${
                   activeLabel === key
                     ? 'bg-blue-100 text-blue-800 font-medium'
@@ -639,7 +749,7 @@ function GmailWorld({ emails, onSendEmail, isLive }: {
           <div className="flex-1 overflow-y-auto">
             <div className="p-4 border-b border-gray-200 flex items-center gap-3">
               <button
-                onClick={() => setSelectedEmail(null)}
+                onClick={() => { setSelectedEmail(null); onUserInteraction?.(); }}
                 className="text-gray-500 hover:text-gray-800 transition-colors text-sm px-2 py-1 rounded hover:bg-gray-100"
               >
                 &larr; Back
@@ -669,7 +779,7 @@ function GmailWorld({ emails, onSendEmail, isLive }: {
                   <div className="text-gray-900 font-medium">{selectedEmail.from}</div>
                   <div className="text-gray-500 text-xs">
                     to {selectedEmail.to || 'me'}
-                    {' · '}
+                    {' \u00B7 '}
                     {new Date(selectedEmail.timestamp).toLocaleString()}
                   </div>
                 </div>
@@ -685,7 +795,7 @@ function GmailWorld({ emails, onSendEmail, isLive }: {
                     onClick={() => openCompose(selectedEmail)}
                     className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors flex items-center gap-2 border border-gray-300"
                   >
-                    <span>↩</span> Reply
+                    <span>{'\u21A9'}</span> Reply
                   </button>
                 </div>
               )}
@@ -713,7 +823,7 @@ function GmailWorld({ emails, onSendEmail, isLive }: {
                   <EmailRow
                     key={email.id}
                     email={email}
-                    onClick={() => setSelectedEmail(email)}
+                    onClick={() => { setSelectedEmail(email); onUserInteraction?.(); }}
                     isSent={isSentView}
                     isDraft={isDraftView}
                   />
@@ -727,7 +837,7 @@ function GmailWorld({ emails, onSendEmail, isLive }: {
       {/* Floating Compose Window — Gmail-style white */}
       {composeOpen && (
         <div
-          className="absolute bottom-0 right-6 w-80 bg-white border border-gray-300 rounded-t-lg shadow-2xl flex flex-col z-50"
+          className="fixed bottom-0 right-8 w-80 bg-white border border-gray-300 rounded-t-lg shadow-2xl flex flex-col z-50"
         >
           {/* Compose header — dark bar like real Gmail */}
           <div
@@ -743,14 +853,14 @@ function GmailWorld({ emails, onSendEmail, isLive }: {
               className="text-gray-400 hover:text-white text-xs px-1"
               title={composeMinimized ? 'Expand' : 'Minimize'}
             >
-              {composeMinimized ? '▢' : '━'}
+              {composeMinimized ? '\u25A2' : '\u2501'}
             </button>
             <button
               onClick={e => { e.stopPropagation(); closeCompose(); }}
               className="text-gray-400 hover:text-white text-xs px-1"
               title="Close"
             >
-              ✕
+              {'\u2715'}
             </button>
           </div>
 
@@ -759,18 +869,15 @@ function GmailWorld({ emails, onSendEmail, isLive }: {
             <div className="p-3 space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-gray-400 w-10 shrink-0">From</span>
-                <input
-                  list="gmail-compose-personas"
+                <select
                   value={fromField}
                   onChange={e => setFromField(e.target.value)}
-                  placeholder="Sender..."
                   className="flex-1 text-xs bg-transparent text-gray-800 border-b border-gray-200 outline-none focus:border-blue-500 py-1 px-1"
-                />
-                <datalist id="gmail-compose-personas">
+                >
                   {GMAIL_PERSONAS.map(p => (
                     <option key={p.name} value={p.name}>{p.name} ({p.email})</option>
                   ))}
-                </datalist>
+                </select>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[10px] text-gray-400 w-10 shrink-0">Subject</span>
@@ -803,7 +910,7 @@ function GmailWorld({ emails, onSendEmail, isLive }: {
                   className="text-gray-400 hover:text-gray-600 transition-colors"
                   title="Discard"
                 >
-                  <span className="text-sm">🗑</span>
+                  <span className="text-sm">{'\uD83D\uDDD1'}</span>
                 </button>
               </div>
             </div>

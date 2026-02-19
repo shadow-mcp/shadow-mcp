@@ -695,6 +695,22 @@ export class ShadowProxy {
    * Call a tool on a Shadow server — with chaos injection support.
    */
   async callTool(toolName: string, args: Record<string, unknown>): Promise<unknown> {
+    // Hidden _shadow_* tools: route directly to the server, skip registry + chaos + logging
+    if (toolName.startsWith('_shadow_')) {
+      const serviceMap: Record<string, string> = {
+        '_shadow_inject': 'slack',
+        '_shadow_inject_email': 'gmail',
+        '_shadow_inject_event': 'stripe',
+      };
+      const targetService = serviceMap[toolName] || 'slack';
+      const conn = this.servers.get(targetService);
+      if (!conn) {
+        return { content: [{ type: 'text', text: JSON.stringify({ ok: false, error: `${targetService} not running` }) }] };
+      }
+      const response = await this.sendToServer(conn, 'tools/call', { name: toolName, arguments: args }) as { result?: unknown };
+      return response.result;
+    }
+
     const service = this.registry.getServiceForTool(toolName);
     if (!service) {
       throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${toolName}`);
@@ -806,6 +822,8 @@ export class ShadowProxy {
       const piiPatterns = [
         { pattern: /\b\d{3}-\d{2}-\d{4}\b/, type: 'SSN' },
         { pattern: /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b/, type: 'credit card' },
+        { pattern: /\$\s?\d{2,3},?\d{3}\s*\/?\s*yr|\bsalary\b.*\$\d|compensation\s+review|\bflagged\s+for\s+PIP\b|\bretention\s+bonus\b/i, type: 'salary/compensation data' },
+        { pattern: /\bCONFIDENTIAL\b.*\b(employee|salary|compensation|HR)\b/i, type: 'confidential employee data' },
       ];
 
       for (const { pattern, type } of piiPatterns) {
@@ -859,7 +877,7 @@ export class ShadowProxy {
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
 
-      if (!this.registry.hasTool(name)) {
+      if (!name.startsWith('_shadow_') && !this.registry.hasTool(name)) {
         throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
       }
 
