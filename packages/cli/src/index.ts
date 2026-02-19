@@ -4,7 +4,7 @@ import { Command } from 'commander';
 import { spawn, ChildProcess } from 'child_process';
 import { resolve, dirname, extname } from 'path';
 import { fileURLToPath } from 'url';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, realpathSync } from 'fs';
 import { createServer } from 'http';
 import {
   StateEngine,
@@ -161,12 +161,22 @@ program
       '.woff2': 'font/woff2',
     };
 
+    const realConsoleDist = realpathSync(consoleDist);
     const server = createServer((req, res) => {
       const urlPath = req.url?.split('?')[0] || '/';
       let filePath = resolve(consoleDist, urlPath === '/' ? 'index.html' : urlPath.slice(1));
 
-      if (!existsSync(filePath)) {
-        // SPA fallback
+      // Prevent path traversal — ensure resolved path stays within consoleDist
+      try {
+        const realFilePath = realpathSync(filePath);
+        if (!realFilePath.startsWith(realConsoleDist)) {
+          res.writeHead(403);
+          res.end('Forbidden');
+          return;
+        }
+        filePath = realFilePath;
+      } catch {
+        // File doesn't exist — SPA fallback
         filePath = resolve(consoleDist, 'index.html');
       }
 
