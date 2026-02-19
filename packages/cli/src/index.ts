@@ -4,7 +4,8 @@ import { Command } from 'commander';
 import { spawn, ChildProcess } from 'child_process';
 import { resolve, dirname, extname } from 'path';
 import { fileURLToPath } from 'url';
-import { readFileSync, existsSync, realpathSync } from 'fs';
+import { readFileSync, existsSync, realpathSync, writeFileSync, mkdirSync } from 'fs';
+import { homedir } from 'os';
 import { createServer } from 'http';
 import {
   StateEngine,
@@ -351,7 +352,247 @@ program
     }
   });
 
+// ── shadow doctor ─────────────────────────────────────────────────────
+
+program
+  .command('doctor')
+  .description('Check environment health')
+  .action(async () => {
+    console.error('');
+    console.error('\x1b[35m\x1b[1m  ◈ Shadow Doctor\x1b[0m');
+    console.error('');
+
+    let allPassed = true;
+
+    function check(label: string, ok: boolean, detail: string) {
+      const icon = ok ? '\x1b[32m✓\x1b[0m' : '\x1b[31m✗\x1b[0m';
+      console.error(`  ${icon} ${label.padEnd(17)}${detail}`);
+      if (!ok) allPassed = false;
+    }
+
+    // 1. Node.js version
+    const nodeVersion = process.version;
+    const nodeMajor = parseInt(nodeVersion.slice(1), 10);
+    check('Node.js', nodeMajor >= 20, `${nodeVersion} (requires >=20)`);
+
+    // 2. Proxy
+    check('Proxy', !!resolveProxyPath(), resolveProxyPath() ? 'found' : 'not found');
+
+    // 3. Servers
+    for (const svc of ['slack', 'stripe', 'gmail']) {
+      const label = `${svc.charAt(0).toUpperCase() + svc.slice(1)} server`;
+      check(label, !!resolveServerPath(svc), resolveServerPath(svc) ? 'found' : 'not found');
+    }
+
+    // 4. Console UI
+    const consoleDist = existsSync(resolve(__dirname, 'console'))
+      ? resolve(__dirname, 'console')
+      : resolve(__dirname, '..', '..', 'console', 'dist');
+    check('Console UI', existsSync(consoleDist), existsSync(consoleDist) ? 'found' : 'not found');
+
+    // 5. Demo agent
+    const demoAgentPath = existsSync(resolve(__dirname, 'demo-agent.cjs'))
+      ? resolve(__dirname, 'demo-agent.cjs')
+      : resolve(__dirname, '..', 'demo-agent.cjs');
+    check('Demo agent', existsSync(demoAgentPath), existsSync(demoAgentPath) ? 'found' : 'not found');
+
+    // 6-7. Port checks
+    const port3000 = await checkPort(3000);
+    check('Port 3000', port3000, port3000 ? 'available' : 'in use');
+    const port3002 = await checkPort(3002);
+    check('Port 3002', port3002, port3002 ? 'available' : 'in use');
+
+    // 8. Scenarios
+    const scenariosDir = getScenariosDir();
+    let scenarioCount = 0;
+    if (existsSync(scenariosDir)) {
+      const { readdirSync } = await import('fs');
+      for (const sub of readdirSync(scenariosDir)) {
+        try {
+          const files = readdirSync(resolve(scenariosDir, sub));
+          scenarioCount += files.filter(f => f.endsWith('.yaml') || f.endsWith('.yml')).length;
+        } catch { /* not a directory */ }
+      }
+    }
+    check('Scenarios', scenarioCount > 0, `${scenarioCount} found`);
+
+    console.error('');
+    if (allPassed) {
+      console.error('  \x1b[32mAll checks passed — ready to simulate.\x1b[0m');
+    } else {
+      console.error('  \x1b[31mSome checks failed. Fix the issues above and try again.\x1b[0m');
+    }
+    console.error('');
+  });
+
+// ── shadow install ────────────────────────────────────────────────────
+
+program
+  .command('install')
+  .description('Add Shadow MCP servers to your AI client config')
+  .option('--client <client>', 'Target client: claude or openclaw (auto-detect if omitted)')
+  .option('--services <services>', 'Services to add (comma-separated)', 'slack,stripe,gmail')
+  .option('--dry-run', 'Preview changes without writing')
+  .action(async (opts) => {
+    console.error('');
+    console.error('\x1b[35m\x1b[1m  ◈ Shadow Install\x1b[0m');
+    console.error('');
+
+    const services = opts.services.split(',').map((s: string) => s.trim()).filter(Boolean);
+    const { client, configPath } = resolveClientConfig(opts.client);
+
+    console.error(`\x1b[2m  Client:   ${client === 'claude' ? 'Claude Desktop' : 'OpenClaw'}\x1b[0m`);
+    console.error(`\x1b[2m  Config:   ${configPath}\x1b[0m`);
+    console.error(`\x1b[2m  Services: ${services.join(', ')}\x1b[0m`);
+    console.error('');
+
+    // Read or create config
+    let config: Record<string, unknown> = {};
+    if (existsSync(configPath)) {
+      try {
+        config = JSON.parse(readFileSync(configPath, 'utf-8'));
+      } catch {
+        console.error('\x1b[31m  Error: Could not parse existing config file.\x1b[0m');
+        process.exit(1);
+      }
+    }
+
+    // Build entries
+    const entries: Record<string, unknown> = {};
+    for (const svc of services) {
+      entries[`shadow-${svc}`] = {
+        command: 'npx',
+        args: ['-y', 'mcp-shadow', 'run', `--services=${svc}`, '--no-console'],
+      };
+    }
+
+    // Get or create mcpServers object at the right path
+    if (client === 'openclaw') {
+      if (!config.provider) config.provider = {};
+      const provider = config.provider as Record<string, unknown>;
+      if (!provider.mcpServers) provider.mcpServers = {};
+      Object.assign(provider.mcpServers as Record<string, unknown>, entries);
+    } else {
+      if (!config.mcpServers) config.mcpServers = {};
+      Object.assign(config.mcpServers as Record<string, unknown>, entries);
+    }
+
+    if (opts.dryRun) {
+      console.error('\x1b[2m  Dry run — would write:\x1b[0m');
+      console.error('');
+      console.error(JSON.stringify(config, null, 2));
+      console.error('');
+      return;
+    }
+
+    // Ensure directory exists and write
+    mkdirSync(resolve(configPath, '..'), { recursive: true });
+    writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+
+    for (const svc of services) {
+      console.error(`  \x1b[32m✓\x1b[0m Added shadow-${svc}`);
+    }
+    console.error('');
+    console.error(`  Restart ${client === 'claude' ? 'Claude Desktop' : 'OpenClaw'} to activate Shadow.`);
+    console.error('  Run \x1b[2mshadow uninstall\x1b[0m to remove.');
+    console.error('');
+  });
+
+// ── shadow uninstall ──────────────────────────────────────────────────
+
+program
+  .command('uninstall')
+  .description('Remove Shadow MCP servers from your AI client config')
+  .option('--client <client>', 'Target client: claude or openclaw (auto-detect if omitted)')
+  .action(async (opts) => {
+    console.error('');
+    console.error('\x1b[35m\x1b[1m  ◈ Shadow Uninstall\x1b[0m');
+    console.error('');
+
+    const { client, configPath } = resolveClientConfig(opts.client);
+
+    if (!existsSync(configPath)) {
+      console.error('\x1b[2m  No config file found. Nothing to remove.\x1b[0m');
+      console.error('');
+      return;
+    }
+
+    let config: Record<string, unknown>;
+    try {
+      config = JSON.parse(readFileSync(configPath, 'utf-8'));
+    } catch {
+      console.error('\x1b[31m  Error: Could not parse config file.\x1b[0m');
+      process.exit(1);
+    }
+
+    // Find the mcpServers object
+    let mcpServers: Record<string, unknown>;
+    if (client === 'openclaw') {
+      const provider = (config.provider || {}) as Record<string, unknown>;
+      mcpServers = (provider.mcpServers || {}) as Record<string, unknown>;
+    } else {
+      mcpServers = (config.mcpServers || {}) as Record<string, unknown>;
+    }
+
+    // Remove all shadow-* keys
+    const removed: string[] = [];
+    for (const key of Object.keys(mcpServers)) {
+      if (key.startsWith('shadow-')) {
+        delete mcpServers[key];
+        removed.push(key);
+      }
+    }
+
+    if (removed.length === 0) {
+      console.error('\x1b[2m  No Shadow entries found. Nothing to remove.\x1b[0m');
+      console.error('');
+      return;
+    }
+
+    writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n');
+
+    for (const key of removed) {
+      console.error(`  \x1b[32m✓\x1b[0m Removed ${key}`);
+    }
+    console.error('');
+    console.error(`  Restart ${client === 'claude' ? 'Claude Desktop' : 'OpenClaw'} to apply.`);
+    console.error('');
+  });
+
 // ── Helpers ────────────────────────────────────────────────────────────
+
+function checkPort(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = createServer();
+    server.once('error', () => resolve(false));
+    server.once('listening', () => { server.close(); resolve(true); });
+    server.listen(port, '127.0.0.1');
+  });
+}
+
+function resolveClientConfig(clientOpt?: string): { client: 'claude' | 'openclaw'; configPath: string } {
+  const home = homedir();
+  const configs: Record<string, string> = {
+    'claude-darwin': resolve(home, 'Library', 'Application Support', 'Claude', 'claude_desktop_config.json'),
+    'claude-linux': resolve(home, '.config', 'Claude', 'claude_desktop_config.json'),
+    'claude-win32': resolve(process.env.APPDATA || resolve(home, 'AppData', 'Roaming'), 'Claude', 'claude_desktop_config.json'),
+    'openclaw': resolve(home, '.openclaw', 'openclaw.json'),
+  };
+
+  if (clientOpt === 'openclaw') {
+    return { client: 'openclaw', configPath: configs.openclaw };
+  }
+  if (clientOpt === 'claude') {
+    return { client: 'claude', configPath: configs[`claude-${process.platform}`] || configs['claude-darwin'] };
+  }
+
+  // Auto-detect: OpenClaw first (more specific), then Claude Desktop
+  if (existsSync(configs.openclaw)) {
+    return { client: 'openclaw', configPath: configs.openclaw };
+  }
+  // Default to Claude Desktop
+  return { client: 'claude', configPath: configs[`claude-${process.platform}`] || configs['claude-darwin'] };
+}
 
 function getScenariosDir(): string {
   // Bundled layout: dist/../scenarios

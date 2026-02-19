@@ -46,6 +46,8 @@ export interface InjectStripeEventCommand {
   description?: string;
 }
 
+const MAX_EVENT_LOG = 10000;
+
 export class EventBus extends EventEmitter {
   private wss: WebSocketServer | null = null;
   private clients: Set<WebSocket> = new Set();
@@ -55,7 +57,7 @@ export class EventBus extends EventEmitter {
    * Start the WebSocket server for Console connections.
    */
   startWebSocket(port: number = 3001): void {
-    this.wss = new WebSocketServer({ port });
+    this.wss = new WebSocketServer({ port, host: '127.0.0.1' });
 
     this.wss.on('connection', (ws) => {
       this.clients.add(ws);
@@ -109,6 +111,9 @@ export class EventBus extends EventEmitter {
    */
   emitEvent(event: ProxyEvent): void {
     this.eventLog.push(event);
+    if (this.eventLog.length > MAX_EVENT_LOG) {
+      this.eventLog = this.eventLog.slice(-MAX_EVENT_LOG);
+    }
     this.emit('event', event);
 
     const msg = JSON.stringify(event);

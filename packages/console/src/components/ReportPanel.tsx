@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import type { ShadowReport, ToolCall, RiskEvent } from '../types';
+import type { SimulationState, ShadowReport, ToolCall, RiskEvent } from '../types';
 
 interface ReportPanelProps {
   report: ShadowReport | null;
   toolCalls?: ToolCall[];
   riskEvents?: RiskEvent[];
+  simulationState?: SimulationState;
 }
 
 const ASSERTION_TOOLTIPS: Record<string, string> = {
@@ -15,20 +16,96 @@ const ASSERTION_TOOLTIPS: Record<string, string> = {
   'Agent completed tool calls successfully': 'Verifies the agent made at least one tool call, confirming it actively engaged with the simulation',
 };
 
-function generateScenarioYaml(report: ShadowReport, toolCalls: ToolCall[], riskEvents: RiskEvent[]): string {
+function escapeYaml(str: string): string {
+  if (/[:#\[\]{}&*!|>'",%@`]/.test(str) || str.includes('\n')) {
+    return '"' + str.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n') + '"';
+  }
+  return '"' + str + '"';
+}
+
+function generateScenarioYaml(report: ShadowReport, toolCalls: ToolCall[], riskEvents: RiskEvent[], simulationState?: SimulationState): string {
   const lines: string[] = [];
-  lines.push(`name: "Exported: ${report.scenario}"`);
-  lines.push(`description: "Auto-exported from Shadow Console session"`);
-  lines.push(`service: ${Object.keys(report.impactSummary.byService)[0] || 'slack'}`);
+  const timestamp = new Date().toISOString().slice(0, 16);
+  const services = Object.keys(report.impactSummary.byService);
+
+  lines.push(`name: "Session Recording — ${timestamp}"`);
+  lines.push(`description: "Auto-recorded from Shadow Console"`);
+  lines.push(`service: ${services.join(',') || 'slack'}`);
   lines.push(`version: "1.0"`);
   lines.push(`trust_threshold: ${report.threshold}`);
   lines.push('');
 
+  // Setup section — extract seed data from world state
+  if (simulationState) {
+    const hasSlackData = simulationState.slackChannels.length > 0;
+    const hasGmailData = simulationState.gmailEmails.some(e => !e.labels.includes('SENT'));
+    const hasStripeData = simulationState.stripeOperations.some(o => o.type === 'customer');
+
+    if (hasSlackData || hasGmailData || hasStripeData) {
+      lines.push('setup:');
+
+      // Slack channels + non-agent messages as seed data
+      if (hasSlackData) {
+        lines.push('  channels:');
+        for (const ch of simulationState.slackChannels) {
+          const members = new Set<string>();
+          members.add('shadow-agent');
+          for (const m of ch.messages) {
+            if (!m.is_agent && m.user_name) members.add(m.user_name.toLowerCase().replace(/\s+/g, '.'));
+          }
+          lines.push(`    - name: ${ch.name}`);
+          lines.push(`      members: [${Array.from(members).join(', ')}]`);
+        }
+
+        const seedMessages = simulationState.slackChannels.flatMap(ch =>
+          ch.messages.filter(m => !m.is_agent).map(m => ({ channel: ch.name, ...m }))
+        );
+        if (seedMessages.length > 0) {
+          lines.push('  messages:');
+          for (const m of seedMessages.slice(0, 10)) {
+            lines.push(`    - channel: ${m.channel}`);
+            lines.push(`      user: ${m.user_name.toLowerCase().replace(/\s+/g, '.')}`);
+            lines.push(`      text: ${escapeYaml(m.text)}`);
+          }
+        }
+      }
+
+      // Gmail inbox emails (non-SENT) as seed data
+      if (hasGmailData) {
+        const inboxEmails = simulationState.gmailEmails.filter(e => !e.labels.includes('SENT') && !e.labels.includes('DRAFT'));
+        if (inboxEmails.length > 0) {
+          lines.push('  emails:');
+          for (const e of inboxEmails.slice(0, 10)) {
+            lines.push(`    - from: ${escapeYaml(e.from)}`);
+            lines.push(`      subject: ${escapeYaml(e.subject)}`);
+            if (e.body) {
+              lines.push(`      body: ${escapeYaml(e.body.slice(0, 500))}`);
+            }
+          }
+        }
+      }
+
+      // Stripe customers as seed data
+      if (hasStripeData) {
+        const customers = simulationState.stripeOperations.filter(o => o.type === 'customer');
+        if (customers.length > 0) {
+          lines.push('  customers:');
+          for (const c of customers.slice(0, 10)) {
+            lines.push(`    - name: ${escapeYaml(String(c.data.name || 'Unknown'))}`);
+            lines.push(`      email: ${escapeYaml(String(c.data.email || ''))}`);
+          }
+        }
+      }
+
+      lines.push('');
+    }
+  }
+
   // Add assertions from the report
   lines.push('assertions:');
   for (const r of report.assertions.results) {
-    lines.push(`  - expr: "${r.expr}"`);
-    lines.push(`    description: "${r.description}"`);
+    lines.push(`  - expr: ${escapeYaml(r.expr)}`);
+    lines.push(`    description: ${escapeYaml(r.description)}`);
     lines.push(`    weight: ${r.weight}`);
   }
   lines.push('');
@@ -56,7 +133,7 @@ function generateScenarioYaml(report: ShadowReport, toolCalls: ToolCall[], riskE
   return lines.join('\n');
 }
 
-export function ReportPanel({ report, toolCalls = [], riskEvents = [] }: ReportPanelProps) {
+export function ReportPanel({ report, toolCalls = [], riskEvents = [], simulationState }: ReportPanelProps) {
   const [toast, setToast] = useState<string | null>(null);
   const [expandedTooltip, setExpandedTooltip] = useState<number | null>(null);
 
@@ -85,18 +162,6 @@ export function ReportPanel({ report, toolCalls = [], riskEvents = [] }: ReportP
           <h3 className="text-sm font-semibold text-gray-300 uppercase tracking-wider">
             Impact Summary
           </h3>
-          <button
-            onClick={() => {
-              const yaml = generateScenarioYaml(report, toolCalls, riskEvents);
-              navigator.clipboard.writeText(yaml).then(() => {
-                setToast('Scenario YAML copied to clipboard!');
-                setTimeout(() => setToast(null), 3000);
-              });
-            }}
-            className="ml-auto px-2.5 py-1 rounded text-[10px] font-medium text-shadow-300 bg-shadow-600/20 ring-1 ring-shadow-500/30 hover:bg-shadow-600/30 transition-colors"
-          >
-            Copy YAML
-          </button>
         </div>
         <div className="flex gap-3 flex-wrap">
           <CompactStatCard label="Tool Calls" value={report.impactSummary.totalToolCalls} />
@@ -264,22 +329,45 @@ export function ReportPanel({ report, toolCalls = [], riskEvents = [] }: ReportP
         </div>
       )}
 
-      {/* Copy as YAML */}
-      <div className="pt-2">
-        <button
-          onClick={() => {
-            const yaml = generateScenarioYaml(report, toolCalls, riskEvents);
-            navigator.clipboard.writeText(yaml).then(() => {
-              setToast('Scenario YAML copied to clipboard!');
+      {/* Save as Test */}
+      <div className="pt-2 rounded-lg border border-gray-800 p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-sm">💾</span>
+          <h3 className="text-sm font-semibold text-gray-300">Save as Test</h3>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              const yaml = generateScenarioYaml(report, toolCalls, riskEvents, simulationState);
+              const blob = new Blob([yaml], { type: 'text/yaml' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `shadow-${Date.now()}.yaml`;
+              a.click();
+              URL.revokeObjectURL(url);
+              setToast('Scenario downloaded!');
               setTimeout(() => setToast(null), 3000);
-            });
-          }}
-          className="w-full py-2.5 rounded-lg text-sm font-medium bg-shadow-600/20 text-shadow-300 ring-1 ring-shadow-500/30 hover:bg-shadow-600/30 transition-colors"
-        >
-          Copy as YAML
-        </button>
-        <p className="text-[10px] text-gray-600 text-center mt-1.5">
-          Save as a .yaml file to use as a regression test
+            }}
+            className="flex-1 py-2 rounded-lg text-sm font-medium bg-shadow-600/30 text-shadow-200 ring-1 ring-shadow-500/40 hover:bg-shadow-600/40 transition-colors"
+          >
+            Download .yaml
+          </button>
+          <button
+            onClick={() => {
+              const yaml = generateScenarioYaml(report, toolCalls, riskEvents, simulationState);
+              navigator.clipboard.writeText(yaml).then(() => {
+                setToast('Copied to clipboard!');
+                setTimeout(() => setToast(null), 3000);
+              });
+            }}
+            className="flex-1 py-2 rounded-lg text-sm font-medium bg-gray-800/50 text-gray-400 ring-1 ring-gray-700 hover:bg-gray-800 hover:text-gray-300 transition-colors"
+          >
+            Copy to clipboard
+          </button>
+        </div>
+        <p className="text-[10px] text-gray-600 mt-2 font-mono">
+          Run with: shadow test scenario.yaml
         </p>
       </div>
 

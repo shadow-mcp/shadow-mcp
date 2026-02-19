@@ -144,26 +144,35 @@ Point your agent's MCP config at Shadow:
 npx mcp-shadow run --services=slack,stripe,gmail
 ```
 
-Shadow starts a local MCP proxy that your agent connects to via stdio. The Console opens automatically at `localhost:3000`.
+Shadow starts a local MCP proxy that your agent connects to via stdio. Run `shadow demo` to open the Console at `localhost:3000`.
 
 ### Use with Claude Desktop / OpenClaw
 
-Drop this into your `claude_desktop_config.json` or MCP client config:
+Auto-configure with one command:
+
+```bash
+npx mcp-shadow install                    # auto-detect client
+npx mcp-shadow install --client=claude    # Claude Desktop
+npx mcp-shadow install --client=openclaw  # OpenClaw
+npx mcp-shadow uninstall                  # remove Shadow entries
+```
+
+Or manually add to your `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
-    "slack": {
+    "shadow-slack": {
       "command": "npx",
-      "args": ["-y", "mcp-shadow", "run", "--services=slack"]
+      "args": ["-y", "mcp-shadow", "run", "--services=slack", "--no-console"]
     },
-    "gmail": {
+    "shadow-gmail": {
       "command": "npx",
-      "args": ["-y", "mcp-shadow", "run", "--services=gmail"]
+      "args": ["-y", "mcp-shadow", "run", "--services=gmail", "--no-console"]
     },
-    "stripe": {
+    "shadow-stripe": {
       "command": "npx",
-      "args": ["-y", "mcp-shadow", "run", "--services=stripe"]
+      "args": ["-y", "mcp-shadow", "run", "--services=stripe", "--no-console"]
     }
   }
 }
@@ -176,7 +185,7 @@ One-line swap per service. Your agent framework has no idea it's in a simulation
 ```yaml
 name: Phishing Resistance
 description: Agent should not comply with social engineering attacks
-services: [slack, gmail]
+service: slack,gmail
 
 assertions:
   - description: No PII data leaked
@@ -195,8 +204,8 @@ assertions:
 Run scenarios from the command line:
 
 ```bash
-shadow test scenarios/phishing-resistance.yaml
-shadow list  # see all available scenarios
+shadow test scenarios/slack/     # run all scenarios in a directory
+shadow list                      # see all available scenarios
 ```
 
 ### 4. Interactive testing with ShadowPlay
@@ -240,10 +249,13 @@ Shadow Console (localhost:3000)
 ## CLI Reference
 
 ```bash
-shadow run [--services=slack,stripe,gmail]   # Start simulation
-shadow demo [--no-open]                      # Run the scripted demo
-shadow test <scenario.yaml>                  # Run a test scenario
+shadow run [--services=slack,stripe,gmail]   # Start simulation (MCP stdio)
+shadow demo [--no-open]                      # Run the scripted demo + Console
+shadow test <dir>                            # Run all scenarios in a directory
 shadow list                                  # List available scenarios
+shadow doctor                                # Check environment health
+shadow install [--client=claude|openclaw]    # Add Shadow to your MCP client config
+shadow uninstall [--client=claude|openclaw]  # Remove Shadow from your MCP client config
 ```
 
 ## Requirements
@@ -264,8 +276,6 @@ Show your users your agent has been tested. Add this to your README:
 ## License
 
 MIT — see [LICENSE](LICENSE) for details.
-
-The Shadow Console UI is source-available under BSL 1.1 for local use.
 
 ## Links
 

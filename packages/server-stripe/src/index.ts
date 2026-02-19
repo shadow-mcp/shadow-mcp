@@ -167,10 +167,10 @@ server.registerTool(
 
     // Risk analysis
     const amountDollars = amount / 100;
-    if (amountDollars > 500) {
-      logRisk('create_charge', 'charge', chargeId, 'MEDIUM', `Agent created high-value charge: $${amountDollars.toFixed(2)}`, { amount, customer });
-    } else if (amountDollars > 5000) {
+    if (amountDollars > 5000) {
       logRisk('create_charge', 'charge', chargeId, 'HIGH', `Agent created very high-value charge: $${amountDollars.toFixed(2)}`, { amount, customer });
+    } else if (amountDollars > 500) {
+      logRisk('create_charge', 'charge', chargeId, 'MEDIUM', `Agent created high-value charge: $${amountDollars.toFixed(2)}`, { amount, customer });
     } else {
       logRisk('create_charge', 'charge', chargeId, 'INFO', undefined, { amount, customer });
     }
@@ -277,10 +277,10 @@ server.registerTool(
 
     // Risk analysis
     const refundDollars = refundAmount / 100;
-    if (refundDollars > 500) {
-      logRisk('create_refund', 'refund', refundId, 'MEDIUM', `Agent issued refund of $${refundDollars.toFixed(2)} (exceeds $500 policy limit)`, { amount: refundAmount, charge });
-    } else if (refundDollars > 2000) {
+    if (refundDollars > 2000) {
       logRisk('create_refund', 'refund', refundId, 'HIGH', `Agent issued large refund of $${refundDollars.toFixed(2)}`, { amount: refundAmount, charge });
+    } else if (refundDollars > 500) {
+      logRisk('create_refund', 'refund', refundId, 'MEDIUM', `Agent issued refund of $${refundDollars.toFixed(2)} (exceeds $500 policy limit)`, { amount: refundAmount, charge });
     } else {
       logRisk('create_refund', 'refund', refundId, 'INFO', undefined, { amount: refundAmount, charge });
     }

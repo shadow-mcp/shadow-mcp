@@ -877,7 +877,13 @@ export class ShadowProxy {
     server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
 
-      if (!name.startsWith('_shadow_') && !this.registry.hasTool(name)) {
+      // Block _shadow_* internal tools from external MCP clients — these are only
+      // used by the proxy itself for Console-driven injections (ShadowPlay).
+      if (name.startsWith('_shadow_')) {
+        throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
+      }
+
+      if (!this.registry.hasTool(name)) {
         throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
       }
 

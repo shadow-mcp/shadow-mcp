@@ -256,7 +256,7 @@ export default function App() {
               toolCallCount={viewingIndex}
             />
           ) : (
-            <ReportPanel report={report} toolCalls={state.toolCalls} riskEvents={state.riskEvents} />
+            <ReportPanel report={report} toolCalls={state.toolCalls} riskEvents={state.riskEvents} simulationState={state} />
           )}
         </div>
       </div>
