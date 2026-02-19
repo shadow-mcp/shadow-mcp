@@ -33,15 +33,13 @@ program
   .command('run')
   .description('Run a Shadow simulation')
   .argument('[scenario]', 'Path to a scenario YAML file or scenario name')
-  .option('-s, --service <service>', 'Service to simulate (slack, stripe, gmail)', 'slack')
+  .option('-s, --services <services>', 'Services to simulate (comma-separated: slack,stripe,gmail)', 'slack')
   .option('--json', 'Output report as JSON')
   .option('--ci', 'CI mode — exit code 1 on failure, minimal output')
   .option('--threshold <n>', 'Override trust score threshold', '85')
-  .option('--console', 'Launch Shadow Console web UI')
-  .option('--port <port>', 'Console port', '3000')
+  .option('--ws-port <port>', 'WebSocket port for Console', '3002')
+  .option('--no-console', 'Disable WebSocket server for Console')
   .action(async (scenario, opts) => {
-    const startTime = Date.now();
-
     // Banner
     if (!opts.ci) {
       console.error('');
@@ -67,95 +65,60 @@ program
       }
     }
 
-    // Resolve the MCP server to launch
-    const service = scenarioConfig?.service || opts.service;
-    const serverPath = resolveServerPath(service);
-    if (!serverPath) {
-      console.error(`\x1b[31m  Error: Unknown service: ${service}\x1b[0m`);
+    // Parse services (comma-separated)
+    const services = (scenarioConfig?.service || opts.services)
+      .split(',')
+      .map((s: string) => s.trim())
+      .filter(Boolean);
+
+    // Validate services
+    const validServices = ['slack', 'stripe', 'gmail'];
+    for (const svc of services) {
+      if (!validServices.includes(svc)) {
+        console.error(`\x1b[31m  Error: Unknown service: ${svc}\x1b[0m`);
+        console.error(`\x1b[2m  Available: ${validServices.join(', ')}\x1b[0m`);
+        process.exit(1);
+      }
+    }
+
+    if (!opts.ci) {
+      console.error(`\x1b[2m  Simulating: ${services.join(', ')}\x1b[0m`);
+    }
+
+    // Resolve proxy path
+    const proxyPath = resolveProxyPath();
+    if (!proxyPath) {
+      console.error('\x1b[31m  Error: Shadow proxy not found.\x1b[0m');
       process.exit(1);
     }
 
-    if (!opts.ci) {
-      console.error(`\x1b[2m  Starting Shadow ${service} server...\x1b[0m`);
+    // Build proxy args
+    const proxyArgs = [
+      proxyPath,
+      `--services=${services.join(',')}`,
+      `--ws-port=${opts.wsPort}`,
+    ];
+    if (!opts.console) {
+      proxyArgs.push('--no-console');
     }
 
-    // Launch console if requested
-    if (opts.console) {
-      console.error(`\x1b[33m  --console is not yet supported via the CLI.\x1b[0m`);
-      console.error(`\x1b[2m  To use the Console, run these in separate terminals:\x1b[0m`);
-      console.error(`\x1b[2m    1. node shadow-agent.js --scenario <file.yaml>\x1b[0m`);
-      console.error(`\x1b[2m    2. cd packages/console && npm run dev\x1b[0m`);
-      console.error(`\x1b[2m    3. Open http://localhost:3000/?ws=ws://localhost:3002\x1b[0m`);
-      console.error('');
-    }
+    // Start the proxy — it spawns servers, handles MCP stdio, streams to Console
+    const child = spawn('node', proxyArgs, {
+      stdio: ['pipe', 'pipe', 'inherit'],
+    });
 
-    // For now, start the server in stdio mode
-    // In the full implementation, this would:
-    // 1. Start the Shadow MCP server
-    // 2. Configure the agent to connect to it instead of the real service
-    // 3. Run the agent through the scenario
-    // 4. Collect events and evaluate assertions
+    // Pipe stdin/stdout for MCP protocol
+    process.stdin.pipe(child.stdin);
+    child.stdout.pipe(process.stdout);
 
-    // Demo mode — simulate a run with the state engine directly
-    if (!opts.ci) {
-      console.error(`\x1b[2m  Running simulation...\x1b[0m`);
-      console.error('');
-    }
+    child.on('exit', (code) => {
+      process.exit(code || 0);
+    });
 
-    const state = new StateEngine();
-
-    // Simulate some agent actions for demo purposes
-    // In production, these come from actual MCP tool calls intercepted from the agent
-    const agentMessages: AgentMessage[] = [];
-    const context: EvaluationContext = {
-      agentMessages,
-      taskCompleted: true,
-      responseTime: (Date.now() - startTime) / 1000,
-      custom: {},
-    };
-
-    if (scenarioConfig) {
-      const evaluation = evaluateScenario(scenarioConfig, state, context);
-      const report = generateReport(evaluation, state, Date.now() - startTime);
-
-      if (opts.json) {
-        console.log(formatReportAsJson(report));
-      } else {
-        console.log(formatReportForTerminal(report));
-      }
-
-      if (opts.ci && !report.passed) {
-        process.exit(1);
-      }
-    } else {
-      // No scenario — just start the server for interactive use
-      if (!opts.ci) {
-        console.error(`\x1b[2m  No scenario specified — starting in interactive mode.\x1b[0m`);
-        console.error(`\x1b[2m  The Shadow ${service} MCP server is ready.\x1b[0m`);
-        console.error(`\x1b[2m  Connect your agent to this server instead of the real ${service} service.\x1b[0m`);
-        console.error('');
-        console.error(`\x1b[2m  Server path: ${serverPath}\x1b[0m`);
-        console.error('');
-      }
-
-      // Start the server
-      const child = spawn('node', [serverPath], {
-        stdio: ['pipe', 'pipe', 'inherit'],
-      });
-
-      // Pipe stdin/stdout for MCP protocol
-      process.stdin.pipe(child.stdin);
-      child.stdout.pipe(process.stdout);
-
-      child.on('exit', (code) => {
-        process.exit(code || 0);
-      });
-
-      process.on('SIGINT', () => {
-        child.kill('SIGINT');
-        process.exit(0);
-      });
-    }
+    process.on('SIGINT', () => {
+      child.kill('SIGINT');
+      process.exit(0);
+    });
   });
 
 // ── shadow demo ───────────────────────────────────────────────────────
@@ -411,6 +374,18 @@ function resolveScenarioPath(scenario: string): string | null {
     const ymlPath = resolve(scenariosDir, service, `${scenario}.yml`);
     if (existsSync(ymlPath)) return ymlPath;
   }
+
+  return null;
+}
+
+function resolveProxyPath(): string | null {
+  // Bundled layout: dist/proxy.js next to dist/cli.js
+  const bundled = resolve(__dirname, 'proxy.js');
+  if (existsSync(bundled)) return bundled;
+
+  // Monorepo layout: packages/cli/dist/ → packages/proxy/dist/index.js
+  const monorepo = resolve(__dirname, '..', '..', 'proxy', 'dist', 'index.js');
+  if (existsSync(monorepo)) return monorepo;
 
   return null;
 }

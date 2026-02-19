@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.svg" alt="Shadow" width="80" />
+  <img src="docs/logo.jpeg" alt="Shadow" width="80" />
 </p>
 
 <h1 align="center">Shadow</h1>
