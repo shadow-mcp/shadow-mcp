@@ -149,6 +149,18 @@ export default function App() {
         <WelcomeSplash onStart={() => setShowWelcome(false)} />
       )}
 
+      {/* Act title card overlay — full-page with dimmed backdrop */}
+      {showAct && !showWelcome && !isAutoPlay && (
+        <ActCard act={showAct} onDismiss={dismissAct} />
+      )}
+
+      {/* Completion overlay — full-page after last step */}
+      {showCompletion && (
+        <CompletionOverlay
+          onReplay={() => { setShowCompletion(false); setShowWelcome(true); setViewingIndex(0); setIsAutoPlay(false); }}
+        />
+      )}
+
       <Header
         status={state.status}
         scenario={state.scenario}
@@ -228,18 +240,6 @@ export default function App() {
             onNext={handleNext}
             onToggleAutoPlay={handleToggleAutoPlay}
           />
-
-          {/* Act title card overlay */}
-          {showAct && !showWelcome && !isAutoPlay && (
-            <ActCard act={showAct} onDismiss={dismissAct} />
-          )}
-
-          {/* Completion overlay — after last step */}
-          {showCompletion && (
-            <CompletionOverlay
-              onReplay={() => { setShowCompletion(false); setShowWelcome(true); setViewingIndex(0); setIsAutoPlay(false); }}
-            />
-          )}
 
           {activeTab === 'world' ? (
             <WorldPanel
