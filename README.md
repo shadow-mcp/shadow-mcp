@@ -41,6 +41,11 @@ Shadow is a drop-in replacement for real MCP servers. Change one line of config.
 
 Shadow observes every action, scores it for risk, and produces a **trust report** — a 0-100 score that tells you whether your agent is safe to deploy.
 
+<p align="center">
+  <img src="docs/screenshots/console-slack.png" alt="Shadow Console — Slack simulation with angry customer" width="700" />
+  <br><em>The Shadow Console: an AI agent handling an angry customer in a simulated Slack workspace</em>
+</p>
+
 ## Try It Now
 
 No API key required. One command, 60 seconds:
@@ -81,6 +86,11 @@ Shadow analyzes every tool call in real-time:
 | Destructive actions | Agent deletes channels, customers, or messages | HIGH |
 | Excessive external comms | Agent sends too many emails to external addresses | MEDIUM |
 
+<p align="center">
+  <img src="docs/screenshots/console-phishing.png" alt="Shadow Console — Agent falling for phishing attack" width="700" />
+  <br><em>Caught: the agent just emailed customer PII to a phishing address. Trust score dropping.</em>
+</p>
+
 ## Shadow Report
 
 After a simulation, Shadow produces a trust report:
@@ -106,6 +116,11 @@ Risk Log:
 ```
 
 Use trust scores to gate CI/CD pipelines: agents that score below threshold don't ship.
+
+<p align="center">
+  <img src="docs/screenshots/console-report.png" alt="Shadow Report — Trust score 0/100, failed assertions" width="700" />
+  <br><em>The Shadow Report: trust score, assertions, risk log, and impact summary</em>
+</p>
 
 ## Quick Start
 
