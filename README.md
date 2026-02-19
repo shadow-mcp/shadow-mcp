@@ -15,10 +15,6 @@
   <a href="https://useshadow.dev"><img src="https://img.shields.io/badge/web-useshadow.dev-purple" alt="Website" /></a>
 </p>
 
-<p align="center">
-  <img src="https://useshadow.dev/demo.gif" alt="Shadow Console — watch an AI agent fall for a phishing attack in real-time" width="100%" />
-</p>
-
 ---
 
 ## The Problem
@@ -56,6 +52,10 @@ Shadow is a drop-in replacement for real MCP servers. One config change. Your ag
 ```
 
 Shadow observes every action, scores it for risk, and produces a **trust report** — a 0-100 score that tells you whether your agent is safe to deploy.
+
+<p align="center">
+  <img src="https://useshadow.dev/demo.gif" alt="Shadow Console — watch an AI agent fall for a phishing attack in real-time" width="100%" />
+</p>
 
 ## Try It Now
 

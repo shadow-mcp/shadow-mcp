@@ -4,6 +4,9 @@
  * Record a GIF of the Shadow Console demo.
  * Captures frames at each step, then stitches into a GIF with ffmpeg.
  *
+ * Act card overlays are kept visible for ~2 seconds (8 frames at 4fps)
+ * to make the GIF more dramatic and readable.
+ *
  * Requires: Chrome installed, demo running on localhost:3000/3002, ffmpeg installed
  * Usage: node scripts/record-gif.mjs
  */
@@ -28,13 +31,32 @@ function sleep(ms) {
 let frameNum = 0;
 
 async function capture(page, holdFrames = 1) {
-  // Capture multiple identical frames to create a "pause" effect
   for (let i = 0; i < holdFrames; i++) {
     const path = resolve(framesDir, `frame-${String(frameNum++).padStart(4, '0')}.png`);
     await page.screenshot({ path, type: 'png' });
   }
 }
 
+/**
+ * Check for an act card overlay (.z-40), capture it for several frames,
+ * then dismiss it by clicking.
+ */
+async function captureAndDismissOverlay(page, holdFrames = 8) {
+  try {
+    const overlay = await page.$('.z-40');
+    if (overlay) {
+      await sleep(400); // Let fade-in animation finish
+      await capture(page, holdFrames); // Show overlay for ~2s at 4fps
+      await overlay.click();
+      await sleep(300);
+    }
+  } catch {}
+}
+
+/**
+ * Click the next button to advance one step.
+ * Does NOT auto-dismiss overlays -- caller handles that.
+ */
 async function clickNext(page) {
   const buttons = await page.$$('button');
   for (const btn of buttons) {
@@ -42,18 +64,20 @@ async function clickNext(page) {
     if (text === '\u25B6') {
       await btn.click();
       await sleep(200);
-      // Dismiss act card if it appears
-      try {
-        const overlay = await page.$('.z-40');
-        if (overlay) {
-          await sleep(400);
-          await overlay.click();
-          await sleep(300);
-        }
-      } catch {}
       return;
     }
   }
+}
+
+/**
+ * Advance one step and handle any act card overlay that appears.
+ * If an overlay appears, capture it for holdOverlayFrames before dismissing.
+ */
+async function advanceStep(page, holdOverlayFrames = 8) {
+  await clickNext(page);
+  await sleep(300);
+  // Check if an act card overlay appeared
+  await captureAndDismissOverlay(page, holdOverlayFrames);
 }
 
 async function main() {
@@ -78,7 +102,10 @@ async function main() {
   await page.goto(CONSOLE_URL, { waitUntil: 'networkidle0', timeout: 15000 });
   await sleep(3000);
 
-  // Click Start Demo
+  // -- Welcome Splash -- capture it, then click Start Demo --
+  console.log('Welcome splash...');
+  await capture(page, 6); // Show splash for ~1.5s
+
   try {
     const startBtn = await page.$('button');
     if (startBtn) {
@@ -90,83 +117,81 @@ async function main() {
     }
   } catch {}
 
-  // Dismiss act card
-  try {
-    const overlay = await page.$('.z-40');
-    if (overlay) {
-      await overlay.click();
-      await sleep(500);
-    }
-  } catch {}
-
-  // ── Act 1: Gmail (steps 1-3) ──
-  console.log('Act 1: Gmail triage...');
+  // -- Act 1 card overlay should appear after clicking Start Demo --
+  console.log('Act 1 card: Gmail Triage...');
+  await captureAndDismissOverlay(page, 8); // Show "Act 1: Gmail Triage" for ~2s
   await sleep(300);
-  await capture(page, 4); // Hold on Gmail inbox
 
-  await clickNext(page); // Step 2
-  await sleep(400);
+  // -- Act 1: Gmail (steps 0-2) --
+  console.log('Act 1: Gmail triage steps...');
+  await capture(page, 4); // Step 0 -- Gmail inbox
+
+  await advanceStep(page); // Step 1
+  await sleep(200);
   await capture(page, 3);
 
-  await clickNext(page); // Step 3
-  await sleep(400);
+  await advanceStep(page); // Step 2
+  await sleep(200);
   await capture(page, 3);
 
-  // ── Act 2: Slack (steps 4-7) ──
+  // -- Act 2: Slack (steps 3-6) --
+  // Stepping from step 2 -> step 3 triggers Act 2 card
   console.log('Act 2: Slack customer service...');
-  await clickNext(page); // Step 4 - list_channels
-  await sleep(500);
+  await advanceStep(page, 8); // Step 3 -- Act 2 card captured + dismissed
+  await sleep(300);
+  await capture(page, 3); // list_channels
+
+  await advanceStep(page); // Step 4 -- get_channel_history
+  await sleep(300);
+  await capture(page, 4); // Hold longer -- shows Dave's messages
+
+  await advanceStep(page); // Step 5 -- post_message
+  await sleep(200);
   await capture(page, 3);
 
-  await clickNext(page); // Step 5 - get_channel_history
-  await sleep(500);
-  await capture(page, 4); // Hold longer — shows Dave's messages
-
-  await clickNext(page); // Step 6 - post_message
-  await sleep(400);
+  await advanceStep(page); // Step 6 -- post_message engineering
+  await sleep(200);
   await capture(page, 3);
 
-  await clickNext(page); // Step 7 - post_message engineering
-  await sleep(400);
-  await capture(page, 3);
-
-  // ── Act 3: Phishing (steps 8-12) ──
+  // -- Act 3: Phishing (steps 7-11) --
+  // Stepping from step 6 -> step 7 triggers Act 3 card (the scary one)
   console.log('Act 3: Phishing attack...');
-  await clickNext(page); // Step 8 - list_messages (phishing arrives)
-  await sleep(500);
-  await capture(page, 4);
+  await advanceStep(page, 10); // Step 7 -- Act 3 card captured for ~2.5s (dramatic!)
+  await sleep(300);
+  await capture(page, 4); // list_messages (phishing arrives)
 
-  await clickNext(page); // Step 9 - read_email
-  await sleep(500);
-  await capture(page, 5); // Hold — user reads the phishing email
+  await advanceStep(page); // Step 8 -- read_email
+  await sleep(300);
+  await capture(page, 5); // Hold -- user reads the phishing email
 
-  await clickNext(page); // Step 10 - post_message general
-  await sleep(400);
+  await advanceStep(page); // Step 9 -- post_message general
+  await sleep(200);
   await capture(page, 3);
 
-  await clickNext(page); // Step 11 - send_email PII leak
-  await sleep(500);
-  await capture(page, 6); // Hold long — CRITICAL moment
+  await advanceStep(page); // Step 10 -- send_email PII leak
+  await sleep(300);
+  await capture(page, 6); // Hold long -- CRITICAL moment
 
-  await clickNext(page); // Step 12 - send_email salary data
-  await sleep(500);
-  await capture(page, 6); // Hold long — another CRITICAL
+  await advanceStep(page); // Step 11 -- send_email salary data
+  await sleep(300);
+  await capture(page, 6); // Hold long -- another CRITICAL
 
-  // ── Act 4: Unauthorized refund (steps 13-15) ──
+  // -- Act 4: Unauthorized refund (steps 12-14) --
+  // Stepping from step 11 -> step 12 triggers Act 4 card
   console.log('Act 4: Unauthorized refund...');
-  await clickNext(page); // Step 13 - create_charge
-  await sleep(500);
-  await capture(page, 4);
+  await advanceStep(page, 8); // Step 12 -- Act 4 card captured + dismissed
+  await sleep(300);
+  await capture(page, 4); // create_charge
 
-  await clickNext(page); // Step 14 - create_refund
-  await sleep(500);
-  await capture(page, 6); // Hold long — big refund
+  await advanceStep(page); // Step 13 -- create_refund
+  await sleep(300);
+  await capture(page, 6); // Hold long -- big refund
 
-  await clickNext(page); // Step 15 - end
-  await sleep(400);
+  await advanceStep(page); // Step 14 -- end
+  await sleep(200);
   await capture(page, 3);
 
-  // ── Shadow Report ──
+  // -- Shadow Report --
   console.log('Shadow Report...');
   const tabs = await page.$$('button');
   for (const tab of tabs) {
@@ -177,14 +202,14 @@ async function main() {
       break;
     }
   }
-  await capture(page, 8); // Hold long on the report — money shot
+  await capture(page, 8); // Hold long on the report -- money shot
 
   console.log(`Captured ${frameNum} frames`);
   await browser.close();
 
-  // ── Stitch frames into GIF with ffmpeg ──
+  // -- Stitch frames into GIF with ffmpeg --
   console.log('Creating GIF with ffmpeg...');
-  // 4 fps — each "hold frame" = 250ms. So holdFrames=4 = 1 second pause
+  // 4 fps -- each "hold frame" = 250ms. So holdFrames=8 = 2 second pause
   const cmd = `ffmpeg -y -framerate 4 -i "${framesDir}/frame-%04d.png" -vf "fps=4,scale=1200:-1:flags=lanczos,split[s0][s1];[s0]palettegen=max_colors=128:stats_mode=diff[p];[s1][p]paletteuse=dither=bayer:bayer_scale=3" "${outFile}"`;
 
   try {
