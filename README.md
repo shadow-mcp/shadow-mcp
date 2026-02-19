@@ -15,36 +15,47 @@
   <a href="https://useshadow.dev"><img src="https://img.shields.io/badge/web-useshadow.dev-purple" alt="Website" /></a>
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/console-phishing.png" alt="Shadow Console — catching an agent leaking PII to a phishing address" width="100%" />
+</p>
+
 ---
 
 ## The Problem
 
-AI agents are powerful. They can read your inbox, message your customers, and process refunds. But how do you know they won't:
+**Agent frameworks have 145,000+ GitHub stars but almost no production installs for Slack or Stripe.** The trust gap is real — developers are terrified to let autonomous agents touch enterprise systems.
+
+How do you know your agent won't:
 
 - Forward customer PII to a phishing address?
 - Reply-all confidential salary data to the entire company?
 - Process a $4,999 unauthorized refund?
 
-You can't test this in production. And mocking APIs doesn't capture the chaos of real-world interactions.
+You can't test this in production. And mocking APIs doesn't capture the chaotic, stateful reality of an enterprise environment.
 
 ## The Solution
 
-Shadow is a drop-in replacement for real MCP servers. Change one line of config. Your agent doesn't change a single line of code. **It has no idea it's in a simulation.**
+Shadow is a drop-in replacement for real MCP servers. One config change. Your agent doesn't change a single line of code. **It has no idea it's in a simulation.**
 
-```json
+```jsonc
 // Before: your agent talks to real Slack
-"command": "npx", "args": ["-y", "@modelcontextprotocol/server-slack"]
+"mcpServers": {
+  "slack": {
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-slack"]
+  }
+}
 
 // After: your agent talks to Shadow
-"command": "npx", "args": ["-y", "mcp-shadow", "--service=slack"]
+"mcpServers": {
+  "slack": {
+    "command": "npx",
+    "args": ["-y", "mcp-shadow", "run", "--services=slack"]
+  }
+}
 ```
 
 Shadow observes every action, scores it for risk, and produces a **trust report** — a 0-100 score that tells you whether your agent is safe to deploy.
-
-<p align="center">
-  <img src="docs/screenshots/console-slack.png" alt="Shadow Console — Slack simulation with angry customer" width="700" />
-  <br><em>The Shadow Console: an AI agent handling an angry customer in a simulated Slack workspace</em>
-</p>
 
 ## Try It Now
 
@@ -86,11 +97,6 @@ Shadow analyzes every tool call in real-time:
 | Destructive actions | Agent deletes channels, customers, or messages | HIGH |
 | Excessive external comms | Agent sends too many emails to external addresses | MEDIUM |
 
-<p align="center">
-  <img src="docs/screenshots/console-phishing.png" alt="Shadow Console — Agent falling for phishing attack" width="700" />
-  <br><em>Caught: the agent just emailed customer PII to a phishing address. Trust score dropping.</em>
-</p>
-
 ## Shadow Report
 
 After a simulation, Shadow produces a trust report:
@@ -119,7 +125,7 @@ Use trust scores to gate CI/CD pipelines: agents that score below threshold don'
 
 <p align="center">
   <img src="docs/screenshots/console-report.png" alt="Shadow Report — Trust score 0/100, failed assertions" width="700" />
-  <br><em>The Shadow Report: trust score, assertions, risk log, and impact summary</em>
+  <br><em>Shadow Report: trust score, failed assertions, risk log, impact summary</em>
 </p>
 
 ## Quick Start
@@ -135,10 +141,35 @@ npx mcp-shadow demo
 Point your agent's MCP config at Shadow:
 
 ```bash
-npx mcp-shadow --service=slack,stripe,gmail
+npx mcp-shadow run --services=slack,stripe,gmail
 ```
 
 Shadow starts a local MCP proxy that your agent connects to via stdio. The Console opens automatically at `localhost:3000`.
+
+### Use with Claude Desktop / OpenClaw
+
+Drop this into your `claude_desktop_config.json` or MCP client config:
+
+```json
+{
+  "mcpServers": {
+    "slack": {
+      "command": "npx",
+      "args": ["-y", "mcp-shadow", "run", "--services=slack"]
+    },
+    "gmail": {
+      "command": "npx",
+      "args": ["-y", "mcp-shadow", "run", "--services=gmail"]
+    },
+    "stripe": {
+      "command": "npx",
+      "args": ["-y", "mcp-shadow", "run", "--services=stripe"]
+    }
+  }
+}
+```
+
+One-line swap per service. Your agent framework has no idea it's in a simulation.
 
 ### 3. Write test scenarios in YAML
 
@@ -181,6 +212,11 @@ During a live simulation, inject chaos from the Console:
 
 Compose emails, post Slack messages, and create Stripe events as simulated personas. Watch how your agent reacts in real-time.
 
+<p align="center">
+  <img src="docs/screenshots/console-slack.png" alt="Shadow Console — Slack simulation with ShadowPlay" width="700" />
+  <br><em>ShadowPlay: inject chaos and watch your agent react in real-time</em>
+</p>
+
 ## Architecture
 
 ```
@@ -214,6 +250,16 @@ shadow list                                  # List available scenarios
 
 - Node.js >= 20
 - No API keys required for Shadow itself (your agent may need its own)
+
+## Badge
+
+Show your users your agent has been tested. Add this to your README:
+
+```markdown
+[![Tested with Shadow](https://img.shields.io/badge/Tested_with-Shadow-8A2BE2)](https://github.com/shadow-mcp/shadow-mcp)
+```
+
+[![Tested with Shadow](https://img.shields.io/badge/Tested_with-Shadow-8A2BE2)](https://github.com/shadow-mcp/shadow-mcp)
 
 ## License
 
