@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/console-phishing.png" alt="Shadow Console — catching an agent leaking PII to a phishing address" width="100%" />
+  <img src="docs/demo.gif" alt="Shadow Console — watch an AI agent fall for a phishing attack in real-time" width="100%" />
 </p>
 
 ---

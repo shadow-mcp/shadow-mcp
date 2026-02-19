@@ -8,3 +8,4 @@ dist/
 *.sqlite
 packages/console/.vite/
 *.docx
+docs/gif-frames/
