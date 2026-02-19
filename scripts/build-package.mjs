@@ -144,6 +144,12 @@ if (existsSync(resolve(root, 'LICENSE'))) {
   console.log('  LICENSE → publish/LICENSE');
 }
 
+// README
+if (existsSync(resolve(root, 'README.md'))) {
+  cpSync(resolve(root, 'README.md'), resolve(publishDir, 'README.md'));
+  console.log('  README.md → publish/README.md');
+}
+
 // 5. Generate package.json
 console.log('\nStep 4/4: Generating package.json...');
 
@@ -163,6 +169,7 @@ const publishPkg = {
     'dist/',
     'scenarios/',
     'LICENSE',
+    'README.md',
   ],
   dependencies: {
     'better-sqlite3': '^11.0.0',
