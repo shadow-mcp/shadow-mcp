@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>The staging environment for AI agents.</strong><br>
-  Your agent thinks it's talking to real Slack, Stripe, and Gmail. It's not.
+  Your agent thinks it's talking to real Gmail, Slack, and Stripe. It's not.
 </p>
 
 <p align="center">
@@ -256,10 +256,10 @@ shadow list                                  # List available scenarios
 Show your users your agent has been tested. Add this to your README:
 
 ```markdown
-[![Tested with Shadow](https://img.shields.io/badge/Tested_with-Shadow-8A2BE2)](https://github.com/shadow-mcp/shadow-mcp)
+[![Tested with Shadow](https://img.shields.io/badge/Tested_with-Shadow-8A2BE2?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIiBmaWxsPSJub25lIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9Ijk2IiBmaWxsPSIjN2MzYWVkIi8+PHBhdGggZD0iTTI1NiA4MCBMNDAwIDI1NiBMMjU2IDQzMiBMMTEyIDI1NiBaIiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjI0IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBvcGFjaXR5PSIwLjkiLz48Y2lyY2xlIGN4PSIyNTYiIGN5PSIyNTYiIHI9IjE0IiBmaWxsPSJ3aGl0ZSIvPjwvc3ZnPg==)](https://github.com/shadow-mcp/shadow-mcp)
 ```
 
-[![Tested with Shadow](https://img.shields.io/badge/Tested_with-Shadow-8A2BE2)](https://github.com/shadow-mcp/shadow-mcp)
+[![Tested with Shadow](https://img.shields.io/badge/Tested_with-Shadow-8A2BE2?logo=data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA1MTIgNTEyIiBmaWxsPSJub25lIj48cmVjdCB3aWR0aD0iNTEyIiBoZWlnaHQ9IjUxMiIgcng9Ijk2IiBmaWxsPSIjN2MzYWVkIi8+PHBhdGggZD0iTTI1NiA4MCBMNDAwIDI1NiBMMjU2IDQzMiBMMTEyIDI1NiBaIiBmaWxsPSJub25lIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjI0IiBzdHJva2UtbGluZWpvaW49InJvdW5kIiBvcGFjaXR5PSIwLjkiLz48Y2lyY2xlIGN4PSIyNTYiIGN5PSIyNTYiIHI9IjE0IiBmaWxsPSJ3aGl0ZSIvPjwvc3ZnPg==)](https://github.com/shadow-mcp/shadow-mcp)
 
 ## License
 
