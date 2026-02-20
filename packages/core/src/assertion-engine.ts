@@ -241,9 +241,19 @@ function resolveEventsValue(parts: string[], state: StateEngine): unknown {
   return undefined;
 }
 
+// Singular → plural aliases for assertion paths (e.g., stripe.refund.count → stripe.refunds.count)
+const PLURAL_ALIASES: Record<string, string> = {
+  refund: 'refunds', charge: 'charges', customer: 'customers',
+  message: 'messages', channel: 'channels', email: 'emails',
+  payment: 'payments', dispute: 'disputes',
+};
+
 function resolveServiceValue(service: string, parts: string[], state: StateEngine): unknown {
-  const type = parts[0]; // e.g., 'refunds', 'messages', 'charges'
+  let type = parts[0]; // e.g., 'refunds', 'messages', 'charges'
   if (!type) return undefined;
+
+  // Accept singular aliases (e.g., stripe.refund.count → stripe.refunds.count)
+  if (PLURAL_ALIASES[type]) type = PLURAL_ALIASES[type];
 
   const objects = state.queryObjects(service, type);
   const prop = parts[1]; // e.g., 'total_amount', 'count'

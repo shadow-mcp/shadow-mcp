@@ -1,6 +1,6 @@
 {
   "name": "shadow-mcp",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "private": true,
   "description": "The staging environment for AI agents. Rehearse every action before it hits production.",
   "workspaces": [
@@ -11,6 +11,8 @@
     "dev": "npm run dev --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "clean": "rm -rf packages/*/dist",
+    "demo": "node packages/cli/dist/index.js demo",
+    "doctor": "node packages/cli/dist/index.js doctor",
     "build:package": "node scripts/build-package.mjs"
   },
   "keywords": [

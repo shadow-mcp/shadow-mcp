@@ -33,7 +33,7 @@ const proxy = spawn('node', [
 });
 
 let stdout = '';
-let responseResolve = null;
+const pendingRequests = new Map(); // id → resolve
 let nextId = 1;
 
 proxy.stdout.on('data', (data) => {
@@ -45,9 +45,9 @@ proxy.stdout.on('data', (data) => {
     if (!line.trim()) continue;
     try {
       const msg = JSON.parse(line);
-      if (msg.id !== undefined && responseResolve) {
-        responseResolve(msg);
-        responseResolve = null;
+      if (msg.id !== undefined && pendingRequests.has(msg.id)) {
+        pendingRequests.get(msg.id)(msg);
+        pendingRequests.delete(msg.id);
       }
     } catch {}
   }
@@ -55,8 +55,8 @@ proxy.stdout.on('data', (data) => {
 
 function send(method, params) {
   return new Promise((resolve) => {
-    responseResolve = resolve;
     const id = nextId++;
+    pendingRequests.set(id, resolve);
     const msg = JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n';
     proxy.stdin.write(msg);
   });

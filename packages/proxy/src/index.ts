@@ -22,12 +22,18 @@ if (isDirectRun && args.length >= 0) {
   const wsPortArg = args.find(a => a.startsWith('--ws-port='));
   const wsPort = wsPortArg ? parseInt(wsPortArg.split('=')[1], 10) : 3001;
 
+  const wsTokenArg = args.find(a => a.startsWith('--ws-token='));
+  const wsToken = wsTokenArg ? wsTokenArg.split('=')[1] : undefined;
+
   const noConsole = args.includes('--no-console');
+  const allowShadowTools = args.includes('--allow-shadow-tools');
 
   const proxy = new ShadowProxy({
     services,
     wsPort,
     enableConsole: !noConsole,
+    wsToken,
+    allowShadowTools,
   });
 
   // Handle graceful shutdown

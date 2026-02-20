@@ -1,5 +1,7 @@
 import { EventEmitter } from 'events';
+import { randomBytes } from 'crypto';
 import { WebSocketServer, WebSocket } from 'ws';
+import type { IncomingMessage } from 'http';
 
 /**
  * Event Bus — streams simulation events to the Console UI via WebSocket
@@ -8,6 +10,9 @@ import { WebSocketServer, WebSocket } from 'ws';
  * Events flow:
  *   Agent → Proxy → Shadow Server → Proxy → Event Bus → WebSocket → Console
  *   Console → WebSocket → Event Bus → Proxy (chaos injection)
+ *
+ * Security: WebSocket requires a handshake token passed as ?token= query param.
+ * The token is generated at startup and included in the Console URL.
  */
 
 export interface ProxyEvent {
@@ -52,14 +57,26 @@ export class EventBus extends EventEmitter {
   private wss: WebSocketServer | null = null;
   private clients: Set<WebSocket> = new Set();
   private eventLog: ProxyEvent[] = [];
+  private token: string = '';
 
   /**
    * Start the WebSocket server for Console connections.
+   * Returns a handshake token that clients must provide as ?token= query param.
+   * If a token is provided, use it; otherwise generate a random one.
    */
-  startWebSocket(port: number = 3001): void {
+  startWebSocket(port: number = 3001, token?: string): string {
+    this.token = token || randomBytes(16).toString('hex');
     this.wss = new WebSocketServer({ port, host: '127.0.0.1' });
 
-    this.wss.on('connection', (ws) => {
+    this.wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
+      // Validate handshake token
+      const url = new URL(req.url || '/', `http://localhost:${port}`);
+      if (url.searchParams.get('token') !== this.token) {
+        console.error('[Shadow] Console rejected — invalid token');
+        ws.close(4001, 'Invalid token');
+        return;
+      }
+
       this.clients.add(ws);
       console.error(`[Shadow] Console connected (${this.clients.size} client(s))`);
 
@@ -104,6 +121,7 @@ export class EventBus extends EventEmitter {
     });
 
     console.error(`[Shadow] WebSocket server listening on ws://localhost:${port}`);
+    return this.token;
   }
 
   /**

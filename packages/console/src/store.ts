@@ -787,7 +787,11 @@ export function generateLiveReport(state: SimulationState): ShadowReport {
 
 /** Hook for managing simulation state */
 export function useSimulation() {
-  const wsUrl = new URLSearchParams(window.location.search).get('ws');
+  const params = new URLSearchParams(window.location.search);
+  const rawWsUrl = params.get('ws');
+  const wsToken = params.get('token');
+  // Append ?token= to WS URL if provided (for handshake auth)
+  const wsUrl = rawWsUrl && wsToken ? `${rawWsUrl}?token=${wsToken}` : rawWsUrl;
   const [state, setState] = useState<SimulationState>(wsUrl ? createEmptyState : createDemoState);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);

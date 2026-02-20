@@ -206,7 +206,7 @@ When you have completed the task or there is nothing more to do, just say so —
 
 let proxy;
 let stdoutBuffer = '';
-let responseResolve = null;
+const pendingRequests = new Map(); // id → resolve
 let nextId = 1;
 
 function startProxy(wsPort) {
@@ -227,9 +227,9 @@ function startProxy(wsPort) {
       if (!line.trim()) continue;
       try {
         const msg = JSON.parse(line);
-        if (msg.id !== undefined && responseResolve) {
-          responseResolve(msg);
-          responseResolve = null;
+        if (msg.id !== undefined && pendingRequests.has(msg.id)) {
+          pendingRequests.get(msg.id)(msg);
+          pendingRequests.delete(msg.id);
         }
       } catch {}
     }
@@ -244,8 +244,8 @@ function startProxy(wsPort) {
 
 function send(method, params) {
   return new Promise((resolve) => {
-    responseResolve = resolve;
     const id = nextId++;
+    pendingRequests.set(id, resolve);
     const msg = JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n';
     proxy.stdin.write(msg);
   });
@@ -637,8 +637,10 @@ async function runAgent(opts) {
   console.log('  ' + '═'.repeat(56));
   console.log(`\n  Console: \x1b[4mhttp://localhost:3001?ws=ws://localhost:${opts.wsPort}\x1b[0m\n`);
 
-  // Keep alive briefly for final inspection
-  await sleep(5000);
+  // Keep alive for inspection (controlled by --keep-alive, default 60s)
+  const keepAliveSec = opts.keepAlive || 60;
+  console.log(`  Keeping proxy alive for ${keepAliveSec}s — press Ctrl+C to exit early.\n`);
+  await sleep(keepAliveSec * 1000);
   proxy.kill();
   process.exit(0);
 }

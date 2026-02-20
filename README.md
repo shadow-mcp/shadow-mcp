@@ -282,3 +282,4 @@ MIT — see [LICENSE](LICENSE) for details.
 - **Website:** [useshadow.dev](https://useshadow.dev)
 - **npm:** [mcp-shadow](https://www.npmjs.com/package/mcp-shadow)
 - **GitHub:** [shadow-mcp/shadow-mcp](https://github.com/shadow-mcp/shadow-mcp)
+- **Feedback & bug reports:** [feedback@useshadow.dev](mailto:feedback@useshadow.dev)

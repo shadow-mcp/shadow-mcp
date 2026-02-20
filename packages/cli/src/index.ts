@@ -5,6 +5,7 @@ import { spawn, ChildProcess } from 'child_process';
 import { resolve, dirname, extname } from 'path';
 import { fileURLToPath } from 'url';
 import { readFileSync, existsSync, realpathSync, writeFileSync, mkdirSync } from 'fs';
+import { randomBytes } from 'crypto';
 import { homedir } from 'os';
 import { createServer } from 'http';
 import {
@@ -101,6 +102,10 @@ program
     ];
     if (!opts.console) {
       proxyArgs.push('--no-console');
+    } else {
+      // Generate a WS auth token so Console connections are authenticated
+      const wsToken = randomBytes(16).toString('hex');
+      proxyArgs.push(`--ws-token=${wsToken}`);
     }
 
     // Start the proxy — it spawns servers, handles MCP stdio, streams to Console
@@ -207,14 +212,16 @@ program
       process.exit(1);
     }
 
-    const demoAgent = spawn('node', [demoAgentPath, `--ws-port=${wsPort}`], {
+    const wsToken = randomBytes(16).toString('hex');
+
+    const demoAgent = spawn('node', [demoAgentPath, `--ws-port=${wsPort}`, `--ws-token=${wsToken}`], {
       stdio: 'inherit',
     });
 
     // 3. Open browser after a short delay
     if (opts.open !== false) {
       setTimeout(async () => {
-        const url = `http://localhost:${port}/?ws=ws://localhost:${wsPort}`;
+        const url = `http://localhost:${port}/?ws=ws://localhost:${wsPort}&token=${wsToken}`;
         console.error(`\x1b[2m  Opening: ${url}\x1b[0m`);
         console.error('');
 
@@ -272,6 +279,9 @@ program
     }
 
     console.error(`\x1b[2m  Found ${files.length} scenario(s)\x1b[0m`);
+    console.error(`\x1b[33m  ⚠ Lint mode: validating YAML + assertions against empty state.\x1b[0m`);
+    console.error(`\x1b[2m    Assertions that check for absence (e.g. "== 0") pass vacuously.\x1b[0m`);
+    console.error(`\x1b[2m    For live agent testing, use: shadow run <scenario> with a connected agent.\x1b[0m`);
     console.error('');
 
     let passed = 0;

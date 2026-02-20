@@ -35,6 +35,9 @@ export interface ProxyConfig {
   services: string[];
   wsPort: number;
   enableConsole: boolean;
+  wsToken?: string;
+  /** Allow _shadow_* tools via MCP (only for demo agent — real agents should never have this) */
+  allowShadowTools?: boolean;
 }
 
 interface ServerConnection {
@@ -61,6 +64,7 @@ export class ShadowProxy {
   private servers: Map<string, ServerConnection> = new Map();
   private config: ProxyConfig;
   private chaosQueue: ChaosEffect[] = [];
+  private wsToken: string = '';
 
   constructor(config: ProxyConfig) {
     this.config = config;
@@ -76,7 +80,7 @@ export class ShadowProxy {
 
     // Start WebSocket for Console
     if (this.config.enableConsole) {
-      this.eventBus.startWebSocket(this.config.wsPort);
+      this.wsToken = this.eventBus.startWebSocket(this.config.wsPort, this.config.wsToken);
       // Listen for chaos commands from Console
       this.eventBus.on('chaos', (cmd: ChaosCommand) => this.handleChaos(cmd));
       // Listen for ShadowPlay message injections from Console
@@ -879,11 +883,13 @@ export class ShadowProxy {
 
       // Block _shadow_* internal tools from external MCP clients — these are only
       // used by the proxy itself for Console-driven injections (ShadowPlay).
+      // Exception: demo agent passes --allow-shadow-tools to seed the world.
       if (name.startsWith('_shadow_')) {
-        throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
-      }
-
-      if (!this.registry.hasTool(name)) {
+        if (!this.config.allowShadowTools) {
+          throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
+        }
+        // Skip registry check — _shadow_* tools are handled directly by callTool()
+      } else if (!this.registry.hasTool(name)) {
         throw new McpError(ErrorCode.MethodNotFound, `Unknown tool: ${name}`);
       }
 
@@ -906,7 +912,7 @@ export class ShadowProxy {
     console.error(`[Shadow] Simulating: ${this.config.services.join(', ')} (${this.registry.getAllTools().length} tools)`);
 
     if (this.config.enableConsole) {
-      console.error(`[Shadow] Console: ws://localhost:${this.config.wsPort}`);
+      console.error(`[Shadow] Console: ws://localhost:${this.config.wsPort}?token=${this.wsToken}`);
     }
   }
 
@@ -933,6 +939,10 @@ export class ShadowProxy {
 
   getEventBus(): EventBus {
     return this.eventBus;
+  }
+
+  getWsToken(): string {
+    return this.wsToken;
   }
 
   async shutdown(): Promise<void> {
