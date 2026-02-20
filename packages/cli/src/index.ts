@@ -677,7 +677,7 @@ if (process.argv.length <= 2) {
   console.log('');
   console.log(`  ${bold('[1]')} Watch the demo            ${dim('First time? Start here (60 sec)')}`);
   console.log(`  ${bold('[2]')} Set up Claude Desktop     ${dim('Auto-install Shadow (one command)')}`);
-  console.log(`  ${bold('[3]')} Connect any agent         ${dim('Get config for any MCP client')}`);
+  console.log(`  ${bold('[3]')} Connect any agent         ${dim('OpenClaw, Cursor, Windsurf, any MCP client')}`);
   console.log('');
 
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -696,8 +696,8 @@ if (process.argv.length <= 2) {
   } else if (choice === '3') {
     console.log(`  ${purple('◈ Connect Any Agent')}`);
     console.log('');
-    console.log(`  Add this to your MCP client config`);
-    console.log(`  ${dim('(Claude Desktop, OpenClaw, Cursor, Windsurf, or any MCP client):')}`);
+    console.log(`  Add this to your MCP client config — works with:`);
+    console.log(`  ${dim('Claude Desktop · OpenClaw · Cursor · Windsurf · any MCP client')}`);
     console.log('');
     console.log(cyan('  {'));
     console.log(cyan('    "shadow-slack": {'));
