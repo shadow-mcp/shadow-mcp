@@ -19,7 +19,7 @@
 
 ## The Problem
 
-**Agent frameworks have 210,000+ GitHub stars but almost no production installs for Slack or Stripe.** The trust gap is real — developers are terrified to let autonomous agents touch enterprise systems.
+**Agent frameworks (like OpenClaw) have 210,000+ GitHub stars but almost no production installs for Slack or Stripe.** The trust gap is real — developers are terrified to let autonomous agents touch enterprise systems.
 
 How do you know your agent won't:
 
