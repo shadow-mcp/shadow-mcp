@@ -663,4 +663,9 @@ function resolveServerPath(service: string): string | null {
   return null;
 }
 
+// Default to demo when no command is given (e.g. `npx mcp-shadow`)
+if (process.argv.length <= 2) {
+  process.argv.push('demo');
+}
+
 program.parse();
