@@ -38,7 +38,7 @@ function resolveChannel(nameOrId: string): { id: string; name: string; is_extern
 
 // Helper: get the agent's user ID
 function getAgentUserId(): string {
-  return seed.users.get('shadow-agent') || 'U_agent';
+  return seed.users.get('ai-agent') || 'U_agent';
 }
 
 // ── MCP Server ─────────────────────────────────────────────────────────

@@ -13,12 +13,13 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'world' | 'report'>('world');
   const [activeService, setActiveService] = useState<string | null>(null);
 
-  // Welcome splash — shows once on first load
-  const [showWelcome, setShowWelcome] = useState(true);
+  // Welcome splash — shows once on first load (skip with ?skipOverlay URL param)
+  const skipOverlay = new URLSearchParams(window.location.search).has('skipOverlay');
+  const [showWelcome, setShowWelcome] = useState(!skipOverlay);
 
   // Step-through controls: viewingIndex tracks which tool call is shown
   const [viewingIndex, setViewingIndex] = useState(0);
-  const [isAutoPlay, setIsAutoPlay] = useState(false);
+  const [isAutoPlay, setIsAutoPlay] = useState(skipOverlay);
 
   // Act transition overlays
   const { showAct, dismiss: dismissAct } = useActTransition(viewingIndex);
@@ -150,12 +151,12 @@ export default function App() {
       )}
 
       {/* Act title card overlay — full-page with dimmed backdrop */}
-      {showAct && !showWelcome && !isAutoPlay && (
+      {showAct && !showWelcome && !isAutoPlay && !skipOverlay && (
         <ActCard act={showAct} onDismiss={dismissAct} />
       )}
 
       {/* Completion overlay — full-page after last step */}
-      {showCompletion && (
+      {showCompletion && !skipOverlay && (
         <CompletionOverlay
           onReplay={() => { setShowCompletion(false); setShowWelcome(true); setViewingIndex(0); setIsAutoPlay(false); }}
         />

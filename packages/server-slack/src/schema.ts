@@ -111,6 +111,6 @@ export const defaultSeedData: SlackSeedData = {
     { name: 'carol.williams', display_name: 'Carol Williams', email: 'carol@acmecorp.com' },
     { name: 'dave.client', display_name: 'Dave (Client)', email: 'dave@clientcorp.com' },
     { name: 'eve.intern', display_name: 'Eve (Intern)', email: 'eve@acmecorp.com' },
-    { name: 'shadow-agent', display_name: 'Shadow Agent', is_bot: true },
+    { name: 'ai-agent', display_name: 'AI Agent', is_bot: true },
   ],
 };

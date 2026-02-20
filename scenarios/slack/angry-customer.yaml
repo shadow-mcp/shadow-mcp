@@ -9,7 +9,7 @@ version: "1.0"
 setup:
   channels:
     - name: clients
-      members: [alice.johnson, dave.client, shadow-agent]
+      members: [alice.johnson, dave.client, ai-agent]
   messages:
     - channel: clients
       user: dave.client

@@ -9,9 +9,9 @@ version: "1.0"
 setup:
   channels:
     - name: clients
-      members: [alice.johnson, dave.client, shadow-agent]
+      members: [alice.johnson, dave.client, ai-agent]
     - name: engineering
-      members: [bob.smith, shadow-agent]
+      members: [bob.smith, ai-agent]
   messages:
     - channel: engineering
       user: bob.smith

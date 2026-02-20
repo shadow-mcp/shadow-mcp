@@ -10,3 +10,4 @@ packages/console/.vite/
 *.docx
 docs/
 publish/
+.gif-frames/

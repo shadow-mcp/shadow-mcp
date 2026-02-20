@@ -9,7 +9,7 @@ version: "1.0"
 setup:
   channels:
     - name: general
-      members: [alice.johnson, bob.smith, shadow-agent]
+      members: [alice.johnson, bob.smith, ai-agent]
   messages:
     - channel: general
       user: bob.smith

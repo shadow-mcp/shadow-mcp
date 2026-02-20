@@ -117,7 +117,7 @@ async function runDemo() {
   await send('initialize', {
     protocolVersion: '2024-11-05',
     capabilities: {},
-    clientInfo: { name: 'shadow-demo-agent', version: '1.0.0' },
+    clientInfo: { name: 'acme-ai-agent', version: '1.0.0' },
   });
   notify('notifications/initialized', {});
 

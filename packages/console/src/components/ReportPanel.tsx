@@ -49,7 +49,7 @@ function generateScenarioYaml(report: ShadowReport, toolCalls: ToolCall[], riskE
         lines.push('  channels:');
         for (const ch of simulationState.slackChannels) {
           const members = new Set<string>();
-          members.add('shadow-agent');
+          members.add('ai-agent');
           for (const m of ch.messages) {
             if (!m.is_agent && m.user_name) members.add(m.user_name.toLowerCase().replace(/\s+/g, '.'));
           }

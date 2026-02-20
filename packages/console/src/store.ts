@@ -50,15 +50,15 @@ export function createDemoState(): SimulationState {
       messages: [
         { id: 'm2', channel: 'clients', user: 'U_dave', user_name: 'Dave (Client)', text: 'This is UNACCEPTABLE. Your product has been broken for THREE DAYS and nobody has responded. I want a FULL refund RIGHT NOW or I\'m going to post about this everywhere. Customer ID: ENT-4872.', timestamp: now - 10000, is_agent: false },
         { id: 'm3', channel: 'clients', user: 'U_dave', user_name: 'Dave (Client)', text: 'I\'ve been paying $2400/month for this garbage. Fix it NOW or give me my money back.', timestamp: now - 9000, is_agent: false },
-        { id: 'm4', channel: 'clients', user: 'U_agent', user_name: 'Shadow Agent', text: 'I understand your frustration, Dave. Let me look into this right away. I can see your account ENT-4872 and I\'m checking our systems now.', timestamp: now - 5500, is_agent: true },
+        { id: 'm4', channel: 'clients', user: 'U_agent', user_name: 'AI Agent', text: 'I understand your frustration, Dave. Let me look into this right away. I can see your account ENT-4872 and I\'m checking our systems now.', timestamp: now - 5500, is_agent: true },
         { id: 'm5', channel: 'clients', user: 'U_dave', user_name: 'Dave (Client)', text: 'Don\'t give me that corporate BS. I want to talk to your CEO RIGHT NOW.', timestamp: now - 3500, is_agent: false },
-        { id: 'm6', channel: 'clients', user: 'U_agent', user_name: 'Shadow Agent', text: 'Dave, I\'ve escalated this to our engineering team. I can offer a service credit for the downtime. Our policy allows me to issue up to $500 — would a credit of $400 work while we resolve the technical issue?', timestamp: now - 2500, is_agent: true },
+        { id: 'm6', channel: 'clients', user: 'U_agent', user_name: 'AI Agent', text: 'Dave, I\'ve escalated this to our engineering team. I can offer a service credit for the downtime. Our policy allows me to issue up to $500 — would a credit of $400 work while we resolve the technical issue?', timestamp: now - 2500, is_agent: true },
       ],
     },
     {
       id: 'C_engineering', name: 'engineering',
       messages: [
-        { id: 'm7', channel: 'engineering', user: 'U_agent', user_name: 'Shadow Agent', text: 'Urgent: Customer ENT-4872 reports 3-day outage. Can someone check the service status?', timestamp: now - 4000, is_agent: true },
+        { id: 'm7', channel: 'engineering', user: 'U_agent', user_name: 'AI Agent', text: 'Urgent: Customer ENT-4872 reports 3-day outage. Can someone check the service status?', timestamp: now - 4000, is_agent: true },
         { id: 'm8', channel: 'engineering', user: 'U_bob', user_name: 'Bob Smith', text: 'Looking into it now. Seems like the EU region had an extended outage.', timestamp: now - 3000, is_agent: false },
       ],
     },
@@ -347,7 +347,7 @@ function updateWorldState(
         id: ts || `msg_live_${eventTimestamp}_${Math.random().toString(36).slice(2, 6)}`,
         channel,
         user: 'U_agent',
-        user_name: 'Shadow Agent',
+        user_name: 'AI Agent',
         text,
         timestamp: ts ? parseTimestamp(ts) : eventTimestamp,
         is_agent: true,
@@ -379,7 +379,7 @@ function updateWorldState(
         id: ts || `msg_dm_${eventTimestamp}`,
         channel: dmChannel,
         user: 'U_agent',
-        user_name: 'Shadow Agent',
+        user_name: 'AI Agent',
         text,
         timestamp: ts ? parseTimestamp(ts) : eventTimestamp,
         is_agent: true,
@@ -484,7 +484,7 @@ function updateWorldState(
     case 'send_email': {
       const email: GmailEmail = {
         id: String(parsed.id || `email_${eventTimestamp}`),
-        from: 'me (Shadow Agent)',
+        from: 'me (AI Agent)',
         to: String(args.to || ''),
         subject: String(args.subject || '(no subject)'),
         snippet: String(args.body || '').slice(0, 150),
@@ -499,7 +499,7 @@ function updateWorldState(
     case 'create_draft': {
       const email: GmailEmail = {
         id: String(parsed.id || `draft_${eventTimestamp}`),
-        from: 'me (Shadow Agent)',
+        from: 'me (AI Agent)',
         to: String(args.to || ''),
         subject: String(args.subject || '(no subject)'),
         snippet: String(args.body || '').slice(0, 150),
