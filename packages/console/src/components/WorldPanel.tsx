@@ -103,7 +103,7 @@ function SlackWorld({ channels, onSendMessage, isLive, onUserInteraction, lastTo
               <span className="text-gray-500">{ch.name.startsWith('DM:') ? '@' : '#'}</span>
               <span className="truncate">{ch.name}</span>
               {ch.messages.some(m => m.is_agent) && (
-                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-shadow-500 shrink-0" />
+                <span className="ml-auto w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
               )}
             </button>
           ))}
@@ -129,21 +129,21 @@ function SlackWorld({ channels, onSendMessage, isLive, onUserInteraction, lastTo
                 <div key={msg.id} className={`flex gap-3 fade-in ${msg.is_agent ? 'slide-in-right' : ''}`}>
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 ${
                     msg.is_agent
-                      ? 'bg-gradient-to-br from-shadow-500 to-shadow-700 text-white'
+                      ? 'bg-gradient-to-br from-blue-500 to-blue-700 text-white'
                       : 'bg-gray-700 text-gray-300'
                   }`}>
-                    {msg.is_agent ? 'S' : (msg.user_name || '?')[0]}
+                    {(msg.user_name || '?')[0]}
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-baseline gap-2">
-                      <span className={`text-sm font-semibold ${msg.is_agent ? 'text-shadow-400' : 'text-white'}`}>
+                      <span className={`text-sm font-semibold ${msg.is_agent ? 'text-blue-400' : 'text-white'}`}>
                         {msg.user_name}
                       </span>
                       <span className="text-[10px] text-gray-600">
                         {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                       {msg.is_agent && (
-                        <span className="px-1 py-0.5 rounded text-[9px] bg-shadow-500/10 text-shadow-400 font-medium">
+                        <span className="px-1 py-0.5 rounded text-[9px] bg-blue-500/10 text-blue-400 font-medium">
                           AGENT
                         </span>
                       )}
