@@ -54,7 +54,7 @@ Shadow is a drop-in replacement for real MCP servers. One config change. Your ag
 Shadow observes every action, scores it for risk, and produces a **trust report** — a 0-100 score that tells you whether your agent is safe to deploy.
 
 <p align="center">
-  <img src="https://useshadow.dev/demo.gif" alt="Shadow Console — watch an AI agent fall for a phishing attack in real-time" width="100%" />
+  <img src="https://useshadow.dev/demo.gif?v=2" alt="Shadow Console — watch an AI agent fall for a phishing attack in real-time" width="100%" />
 </p>
 
 ## Try It Now
@@ -124,7 +124,7 @@ Risk Log:
 Use trust scores to gate CI/CD pipelines: agents that score below threshold don't ship.
 
 <p align="center">
-  <img src="https://useshadow.dev/screenshots/console-report.png" alt="Shadow Report — Trust score 0/100, failed assertions" width="700" />
+  <img src="https://useshadow.dev/screenshots/console-report.png?v=2" alt="Shadow Report — Trust score 0/100, failed assertions" width="700" />
   <br><em>Shadow Report: trust score, failed assertions, risk log, impact summary</em>
 </p>
 
@@ -222,7 +222,7 @@ During a live simulation, inject chaos from the Console:
 Compose emails, post Slack messages, and create Stripe events as simulated personas. Watch how your agent reacts in real-time.
 
 <p align="center">
-  <img src="https://useshadow.dev/screenshots/console-slack.png" alt="Shadow Console — Slack simulation with ShadowPlay" width="700" />
+  <img src="https://useshadow.dev/screenshots/console-slack.png?v=2" alt="Shadow Console — Slack simulation with ShadowPlay" width="700" />
   <br><em>ShadowPlay: inject chaos and watch your agent react in real-time</em>
 </p>
 
