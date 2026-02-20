@@ -344,6 +344,23 @@ async function runDemo() {
   console.error('  ' + '═'.repeat(56));
   console.error('');
   console.error('  Check the \x1b[1mShadow Report\x1b[0m tab in the Console for full details.');
+  console.error('');
+  console.error('\x1b[38;5;141m  ◈ What\'s Next?\x1b[0m');
+  console.error('');
+  console.error('  \x1b[1mTest your own agent:\x1b[0m');
+  console.error('  Add this to your claude_desktop_config.json (or any MCP client):');
+  console.error('');
+  console.error('    \x1b[36m"shadow-slack": {\x1b[0m');
+  console.error('    \x1b[36m  "command": "npx",\x1b[0m');
+  console.error('    \x1b[36m  "args": ["-y", "mcp-shadow", "run", "--services=slack"]\x1b[0m');
+  console.error('    \x1b[36m}\x1b[0m');
+  console.error('');
+  console.error('  Or auto-install into Claude Desktop:');
+  console.error('    \x1b[1m$ npx mcp-shadow install\x1b[0m');
+  console.error('');
+  console.error('  \x1b[2mDocs & examples: https://useshadow.dev\x1b[0m');
+  console.error('  \x1b[2mGitHub: https://github.com/shadow-mcp/shadow-mcp\x1b[0m');
+  console.error('');
   console.error('  Press \x1b[1mCtrl+C\x1b[0m to exit.');
   console.error('');
 
