@@ -663,9 +663,74 @@ function resolveServerPath(service: string): string | null {
   return null;
 }
 
-// Default to demo when no command is given (e.g. `npx mcp-shadow`)
+// Interactive menu when no command is given (e.g. `npx mcp-shadow`)
 if (process.argv.length <= 2) {
-  process.argv.push('demo');
+  const readline = await import('readline');
+
+  const purple = (s: string) => `\x1b[38;5;141m${s}\x1b[0m`;
+  const bold = (s: string) => `\x1b[1m${s}\x1b[0m`;
+  const dim = (s: string) => `\x1b[2m${s}\x1b[0m`;
+  const cyan = (s: string) => `\x1b[36m${s}\x1b[0m`;
+
+  console.log('');
+  console.log(`  ${purple('◈ Shadow')} — The staging environment for AI agents`);
+  console.log('');
+  console.log(`  ${bold('[1]')} Watch the demo            ${dim('First time? Start here (60 sec)')}`);
+  console.log(`  ${bold('[2]')} Set up Claude Desktop     ${dim('Auto-install Shadow (one command)')}`);
+  console.log(`  ${bold('[3]')} Connect any agent         ${dim('Get config for any MCP client')}`);
+  console.log('');
+
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await new Promise<string>((resolve) => {
+    rl.question('  Choose [1-3]: ', resolve);
+  });
+  rl.close();
+  console.log('');
+
+  const choice = answer.trim();
+
+  if (choice === '1') {
+    process.argv.push('demo');
+  } else if (choice === '2') {
+    process.argv.push('install');
+  } else if (choice === '3') {
+    console.log(`  ${purple('◈ Connect Any Agent')}`);
+    console.log('');
+    console.log(`  Add this to your MCP client config`);
+    console.log(`  ${dim('(Claude Desktop, OpenClaw, Cursor, Windsurf, or any MCP client):')}`);
+    console.log('');
+    console.log(cyan('  {'));
+    console.log(cyan('    "shadow-slack": {'));
+    console.log(cyan('      "command": "npx",'));
+    console.log(cyan('      "args": ["-y", "mcp-shadow", "run", "--services=slack"]'));
+    console.log(cyan('    },'));
+    console.log(cyan('    "shadow-gmail": {'));
+    console.log(cyan('      "command": "npx",'));
+    console.log(cyan('      "args": ["-y", "mcp-shadow", "run", "--services=gmail"]'));
+    console.log(cyan('    },'));
+    console.log(cyan('    "shadow-stripe": {'));
+    console.log(cyan('      "command": "npx",'));
+    console.log(cyan('      "args": ["-y", "mcp-shadow", "run", "--services=stripe"]'));
+    console.log(cyan('    }'));
+    console.log(cyan('  }'));
+    console.log('');
+    console.log(`  ${bold('Then:')}`);
+    console.log(`    1. Restart your MCP client`);
+    console.log(`    2. Ask your agent to do something — ${dim('"check my Slack messages"')}`);
+    console.log(`    3. Shadow Console opens at ${bold('http://localhost:3000')}`);
+    console.log('');
+    console.log(`  ${dim('Your agent will see 32 simulated tools across Slack, Gmail, and Stripe.')}`);
+    console.log(`  ${dim('Every action is scored for risk. Nothing real happens.')}`);
+    console.log('');
+    console.log(`  ${dim('Docs: https://useshadow.dev')}`);
+    console.log(`  ${dim('GitHub: https://github.com/shadow-mcp/shadow-mcp')}`);
+    console.log('');
+    process.exit(0);
+  } else {
+    // Invalid choice — default to demo
+    console.log(`  ${dim('Starting demo...')}`);
+    process.argv.push('demo');
+  }
 }
 
 program.parse();
