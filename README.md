@@ -144,7 +144,7 @@ Point your agent's MCP config at Shadow:
 npx mcp-shadow run --services=slack,stripe,gmail
 ```
 
-Shadow starts a local MCP proxy that your agent connects to via stdio. Run `shadow demo` to open the Console at `localhost:3000`.
+Shadow starts a local MCP proxy that your agent connects to via stdio. The Shadow Console opens automatically at `localhost:3000` — watch every tool call, trust score, and risk event in real-time.
 
 ### Use with Claude Desktop / OpenClaw
 
