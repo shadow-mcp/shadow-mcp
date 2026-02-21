@@ -128,6 +128,34 @@ Use trust scores to gate CI/CD pipelines: agents that score below threshold don'
   <br><em>Shadow Report: trust score, failed assertions, risk log, impact summary</em>
 </p>
 
+## Skill Scanning
+
+Scan MCP skills for malicious patterns before installing them. Catches `curl | bash`, reverse shells, credential harvesting, prompt injection, and more.
+
+```bash
+npx mcp-shadow scan ./my-skill
+```
+
+```
+  ◈ Shadow Skill Scan
+  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Skill:          my-skill
+  Files scanned:  3
+  Trust Score:    0/100  FAIL
+
+  Findings:
+    ✗ CRITICAL  Pipe to shell (curl | bash)
+                SKILL.md:9
+    ✗ CRITICAL  Bash reverse shell (/dev/tcp)
+                index.js:9
+    ✗ HIGH      Node.js environment access (process.env)
+                index.js:5
+
+  Recommendation: DO NOT INSTALL
+```
+
+Use `--json` for CI pipelines. Exit code 1 when trust score falls below `--threshold` (default: 70).
+
 ## Quick Start
 
 ### 1. Run the demo (no setup required)
@@ -252,6 +280,7 @@ Shadow Console (localhost:3000)
 shadow run [--services=slack,stripe,gmail]   # Start simulation (MCP stdio)
 shadow demo [--no-open]                      # Run the scripted demo + Console
 shadow test <dir>                            # Run all scenarios in a directory
+shadow scan <path> [--json] [--threshold=70] # Scan an MCP skill for security risks
 shadow list                                  # List available scenarios
 shadow doctor                                # Check environment health
 shadow install [--client=claude|openclaw]    # Add Shadow to your MCP client config

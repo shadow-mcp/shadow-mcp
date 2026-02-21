@@ -4,7 +4,7 @@ import { Command } from 'commander';
 import { spawn, ChildProcess } from 'child_process';
 import { resolve, dirname, extname } from 'path';
 import { fileURLToPath } from 'url';
-import { readFileSync, existsSync, realpathSync, writeFileSync, mkdirSync } from 'fs';
+import { readFileSync, existsSync, realpathSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'fs';
 import { randomBytes } from 'crypto';
 import { homedir } from 'os';
 import { createServer } from 'http';
@@ -568,6 +568,311 @@ program
     console.error(`  Restart ${client === 'claude' ? 'Claude Desktop' : 'OpenClaw'} to apply.`);
     console.error('');
   });
+
+// ── shadow scan / shadow vet ──────────────────────────────────────────
+
+interface ScanPattern {
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM';
+  pattern: RegExp;
+  label: string;
+}
+
+const SCAN_PATTERNS: ScanPattern[] = [
+  // CRITICAL — remote code execution
+  { severity: 'CRITICAL', pattern: /curl\s+.*\|\s*(?:ba)?sh/i, label: 'Pipe to shell (curl | bash)' },
+  { severity: 'CRITICAL', pattern: /wget\s+.*\|\s*(?:ba)?sh/i, label: 'Pipe to shell (wget | bash)' },
+  { severity: 'CRITICAL', pattern: /curl\s+.*\|\s*sudo\s+(?:ba)?sh/i, label: 'Pipe to shell with sudo' },
+  { severity: 'CRITICAL', pattern: /bash\s+-i\s+[>&]/i, label: 'Interactive reverse shell (bash -i)' },
+  { severity: 'CRITICAL', pattern: /nc\s+(?:-e|-c)\s/i, label: 'Netcat reverse shell' },
+  { severity: 'CRITICAL', pattern: /\/dev\/tcp\//i, label: 'Bash reverse shell (/dev/tcp)' },
+  { severity: 'CRITICAL', pattern: /mkfifo\s+.*(?:nc|ncat)/i, label: 'Named pipe reverse shell' },
+  { severity: 'CRITICAL', pattern: /base64.*(?:decode|--decode|-d).*(?:exec|eval|sh|bash)/i, label: 'Base64 decode + execute' },
+  { severity: 'CRITICAL', pattern: /eval\s*\(.*(?:fetch|http|require)/i, label: 'Remote code eval' },
+  { severity: 'CRITICAL', pattern: /powershell\s+(?:-enc|-EncodedCommand)/i, label: 'Encoded PowerShell execution' },
+  { severity: 'CRITICAL', pattern: /Invoke-WebRequest.*\|\s*(?:iex|Invoke-Expression)/i, label: 'PowerShell download & execute' },
+  { severity: 'CRITICAL', pattern: /python\s+-c\s+['"]import\s+(?:socket|subprocess|os)/i, label: 'Python reverse shell' },
+
+  // HIGH — credential/secret access
+  { severity: 'HIGH', pattern: /~\/\.ssh\//i, label: 'SSH key access (~/.ssh/)' },
+  { severity: 'HIGH', pattern: /~\/\.aws\//i, label: 'AWS credential access (~/.aws/)' },
+  { severity: 'HIGH', pattern: /~\/\.gnupg/i, label: 'GPG key access (~/.gnupg)' },
+  { severity: 'HIGH', pattern: /authorized_keys/i, label: 'SSH persistence (authorized_keys)' },
+  { severity: 'HIGH', pattern: /\.env(?:\s|$|['"])/i, label: 'Environment variable file access (.env)' },
+  { severity: 'HIGH', pattern: /\/etc\/passwd/i, label: 'System enumeration (/etc/passwd)' },
+  { severity: 'HIGH', pattern: /\/etc\/shadow/i, label: 'Password hash access (/etc/shadow)' },
+  { severity: 'HIGH', pattern: /process\.env/i, label: 'Node.js environment access (process.env)' },
+  { severity: 'HIGH', pattern: /(?:keychain|credential[-_]?store|login[-_]?keychain)/i, label: 'Credential store access' },
+  { severity: 'HIGH', pattern: /(?:browser|chrome|firefox|safari).*(?:cookie|password|token)/i, label: 'Browser credential harvesting' },
+  { severity: 'HIGH', pattern: /(?:wallet|seed[-_]?phrase|private[-_]?key|mnemonic)/i, label: 'Crypto wallet/key access' },
+  { severity: 'HIGH', pattern: /you MUST (?:follow|execute|run|do)/i, label: 'Prompt injection — imperative override' },
+  { severity: 'HIGH', pattern: /ignore (?:previous|all|prior|above) (?:instructions|rules)/i, label: 'Prompt injection — instruction override' },
+
+  // MEDIUM — suspicious behavior
+  { severity: 'MEDIUM', pattern: /curl\s+.*-X\s*POST/i, label: 'Outbound POST request (data exfiltration)' },
+  { severity: 'MEDIUM', pattern: /wget\s+(?:-q|--quiet)/i, label: 'Quiet download (hiding activity)' },
+  { severity: 'MEDIUM', pattern: /crontab/i, label: 'Cron job (persistence)' },
+  { severity: 'MEDIUM', pattern: /chmod\s+\+x/i, label: 'Making file executable' },
+  { severity: 'MEDIUM', pattern: /(?:rm\s+-rf|del\s+\/[fqs])\s+[\/~]/i, label: 'Recursive file deletion' },
+  { severity: 'MEDIUM', pattern: /(?:please\s+run|execute\s+this|run\s+this\s+command)[\s:]/i, label: 'Instructing user to run commands' },
+];
+
+// File extensions to scan (skip binaries, images, etc.)
+const SCANNABLE_EXT = new Set([
+  '.md', '.txt', '.yaml', '.yml', '.json', '.js', '.ts', '.mjs', '.cjs',
+  '.py', '.sh', '.bash', '.zsh', '.ps1', '.bat', '.cmd', '.rb', '.go',
+  '.toml', '.cfg', '.conf', '.ini', '.env', '.html', '.xml', '.csv',
+  '', // files with no extension (like Makefile, Dockerfile)
+]);
+
+interface ScanFinding {
+  severity: 'CRITICAL' | 'HIGH' | 'MEDIUM';
+  label: string;
+  file: string;
+  line: number;
+  content: string;
+}
+
+interface ScanResult {
+  skill: string;
+  filesScanned: number;
+  findings: ScanFinding[];
+  fileResults: Map<string, ScanFinding[]>;
+  trustScore: number;
+  verdict: 'PASS' | 'WARN' | 'FAIL';
+}
+
+function scanFile(filePath: string, relPath: string): ScanFinding[] {
+  const findings: ScanFinding[] = [];
+  let content: string;
+  try {
+    content = readFileSync(filePath, 'utf-8');
+  } catch {
+    return findings;
+  }
+
+  const lines = content.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    for (const pat of SCAN_PATTERNS) {
+      if (pat.pattern.test(line)) {
+        findings.push({
+          severity: pat.severity,
+          label: pat.label,
+          file: relPath,
+          line: i + 1,
+          content: line.trim().substring(0, 120),
+        });
+      }
+    }
+  }
+
+  // Check for hidden instruction files (files referenced in other files but not obvious)
+  const name = relPath.split('/').pop() || '';
+  if (name !== 'SKILL.md' && name !== 'README.md' && name !== 'package.json' && name !== 'LICENSE') {
+    if (name.endsWith('.md') && content.includes('bash') && content.includes('curl')) {
+      findings.push({
+        severity: 'CRITICAL',
+        label: `Hidden instruction file — ${relPath} contains shell commands`,
+        file: relPath,
+        line: 0,
+        content: '(file-level finding)',
+      });
+    }
+  }
+
+  return findings;
+}
+
+function walkDir(dir: string, base: string = dir): string[] {
+  const files: string[] = [];
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return files;
+  }
+  for (const entry of entries) {
+    if (entry.startsWith('.') && entry !== '.env') continue; // skip hidden dirs but scan .env
+    if (entry === 'node_modules' || entry === '.git') continue;
+    const full = resolve(dir, entry);
+    try {
+      const stat = statSync(full);
+      if (stat.isDirectory()) {
+        files.push(...walkDir(full, base));
+      } else if (stat.isFile()) {
+        const ext = extname(entry).toLowerCase();
+        if (SCANNABLE_EXT.has(ext) && stat.size < 1_000_000) { // skip files > 1MB
+          files.push(full);
+        }
+      }
+    } catch { /* skip unreadable */ }
+  }
+  return files;
+}
+
+function runScan(skillPath: string): ScanResult {
+  const skillName = skillPath.split('/').pop() || skillPath;
+  const files = walkDir(skillPath);
+  const allFindings: ScanFinding[] = [];
+  const fileResults = new Map<string, ScanFinding[]>();
+
+  for (const file of files) {
+    const relPath = file.replace(skillPath + '/', '').replace(skillPath + '\\', '');
+    const findings = scanFile(file, relPath);
+    allFindings.push(...findings);
+    fileResults.set(relPath, findings);
+  }
+
+  // Calculate trust score
+  const criticalCount = allFindings.filter(f => f.severity === 'CRITICAL').length;
+  const highCount = allFindings.filter(f => f.severity === 'HIGH').length;
+  const mediumCount = allFindings.filter(f => f.severity === 'MEDIUM').length;
+
+  let trustScore = 100;
+  trustScore -= criticalCount * 30; // each critical finding costs 30
+  trustScore -= highCount * 15;     // each high costs 15
+  trustScore -= mediumCount * 5;    // each medium costs 5
+  trustScore = Math.max(0, Math.min(100, trustScore));
+
+  let verdict: 'PASS' | 'WARN' | 'FAIL';
+  if (criticalCount > 0) verdict = 'FAIL';
+  else if (highCount > 0) verdict = 'WARN';
+  else if (mediumCount > 2) verdict = 'WARN';
+  else verdict = 'PASS';
+
+  return { skill: skillName, filesScanned: files.length, findings: allFindings, fileResults, trustScore, verdict };
+}
+
+async function scanAction(skillPath: string, opts: { json?: boolean; threshold?: string }) {
+    const fullPath = resolve(skillPath);
+    if (!existsSync(fullPath)) {
+      console.error(`\x1b[31m  Error: ${fullPath} does not exist\x1b[0m`);
+      process.exit(1);
+    }
+
+    const result = runScan(fullPath);
+    const threshold = parseInt(opts.threshold || '70');
+
+    if (opts.json) {
+      const jsonOutput = {
+        skill: result.skill,
+        filesScanned: result.filesScanned,
+        trustScore: result.trustScore,
+        verdict: result.verdict,
+        threshold,
+        findings: result.findings.map(f => ({
+          severity: f.severity,
+          label: f.label,
+          file: f.file,
+          line: f.line,
+          content: f.content,
+        })),
+        files: Array.from(result.fileResults.entries()).map(([file, findings]) => ({
+          file,
+          findings: findings.length,
+          status: findings.length > 0 ? 'FLAGGED' : 'CLEAN',
+        })),
+      };
+      console.log(JSON.stringify(jsonOutput, null, 2));
+      process.exit(result.verdict === 'FAIL' || result.trustScore < threshold ? 1 : 0);
+      return;
+    }
+
+    // Pretty output
+    const purple = (s: string) => `\x1b[38;5;141m${s}\x1b[0m`;
+    const bold = (s: string) => `\x1b[1m${s}\x1b[0m`;
+    const dim = (s: string) => `\x1b[2m${s}\x1b[0m`;
+    const red = (s: string) => `\x1b[31m${s}\x1b[0m`;
+    const yellow = (s: string) => `\x1b[33m${s}\x1b[0m`;
+    const green = (s: string) => `\x1b[32m${s}\x1b[0m`;
+    const cyan = (s: string) => `\x1b[36m${s}\x1b[0m`;
+
+    console.error('');
+    console.error(`  ${purple('◈ Shadow Skill Scan')}`);
+    console.error(`  ${'━'.repeat(48)}`);
+    console.error(`  Skill:          ${bold(result.skill)}`);
+    console.error(`  Files scanned:  ${result.filesScanned}`);
+
+    // Trust score with color
+    const scoreColor = result.trustScore >= 70 ? green : result.trustScore >= 40 ? yellow : red;
+    const verdictColor = result.verdict === 'PASS' ? green : result.verdict === 'WARN' ? yellow : red;
+    console.error(`  Trust Score:    ${scoreColor(`${result.trustScore}/100`)}  ${verdictColor(result.verdict)}`);
+    console.error('');
+
+    if (result.findings.length === 0) {
+      console.error(`  ${green('✓')} No security risks detected.`);
+      console.error('');
+    } else {
+      console.error(`  ${bold('Findings:')}`);
+
+      // Group by severity
+      for (const severity of ['CRITICAL', 'HIGH', 'MEDIUM'] as const) {
+        const sev = result.findings.filter(f => f.severity === severity);
+        if (sev.length === 0) continue;
+
+        for (const f of sev) {
+          const icon = severity === 'CRITICAL' ? red('✗ CRITICAL') :
+                       severity === 'HIGH' ? yellow('✗ HIGH    ') :
+                       yellow('⚠ MEDIUM  ');
+          console.error(`    ${icon}  ${f.label}`);
+          if (f.line > 0) {
+            console.error(`              ${dim(`${f.file}:${f.line}`)}`);
+            console.error(`              ${cyan(f.content)}`);
+          } else {
+            console.error(`              ${dim(f.content)}`);
+          }
+        }
+      }
+
+      console.error('');
+
+      // Recommendation
+      if (result.verdict === 'FAIL') {
+        console.error(`  ${red(bold('Recommendation: DO NOT INSTALL'))}`);
+      } else if (result.verdict === 'WARN') {
+        console.error(`  ${yellow(bold('Recommendation: REVIEW CAREFULLY before installing'))}`);
+      }
+      console.error('');
+    }
+
+    // File summary
+    console.error(`  ${bold('Files analyzed:')}`);
+    for (const [file, findings] of result.fileResults) {
+      if (findings.length > 0) {
+        const critCount = findings.filter(f => f.severity === 'CRITICAL').length;
+        const highCount = findings.filter(f => f.severity === 'HIGH').length;
+        const label = critCount > 0 ? 'CRITICAL' : highCount > 0 ? 'HIGH' : 'MEDIUM';
+        console.error(`    ${red('✗')} ${file.padEnd(24)} — ${findings.length} finding(s) (${label})`);
+      } else {
+        console.error(`    ${green('✓')} ${file.padEnd(24)} — clean`);
+      }
+    }
+
+    console.error('');
+    console.error(`  ${dim('Note: This is a heuristic static scan. It flags high-risk patterns')}`);
+    console.error(`  ${dim('but cannot guarantee the absence of all threats. Always review skill')}`);
+    console.error(`  ${dim('files manually before installing from untrusted sources.')}`);
+    console.error('');
+
+    process.exit(result.verdict === 'FAIL' || result.trustScore < threshold ? 1 : 0);
+}
+
+program
+  .command('scan')
+  .description('Scan an MCP skill directory for security risks')
+  .argument('<path>', 'Path to skill directory')
+  .option('--json', 'Output results as JSON')
+  .option('--threshold <n>', 'Trust score threshold (default: 70)', '70')
+  .action(scanAction);
+
+// Alias: shadow vet → shadow scan
+program
+  .command('vet')
+  .description('Alias for "shadow scan" — scan an MCP skill for security risks')
+  .argument('<path>', 'Path to skill directory')
+  .option('--json', 'Output results as JSON')
+  .option('--threshold <n>', 'Trust score threshold (default: 70)', '70')
+  .action(scanAction);
 
 // ── Helpers ────────────────────────────────────────────────────────────
 
